@@ -15,6 +15,7 @@ import { TemplateBuilder } from "@/components/template-builder"
 import { AuthPages } from "@/components/auth-pages"
 import { useAuth } from "@/lib/auth-context"
 import { Loader2 } from "lucide-react"
+import { Settings } from "@/components/settings"
 
 export default function Home() {
   const { isAuthenticated, isLoading, user, logout } = useAuth()
@@ -48,7 +49,7 @@ export default function Home() {
       case "templates":
         return <Templates />
       case "assignments":
-        return <Assignments />
+        return <Assignments userRole={userRole} />
       case "audits":
         return <Audits />
       case "reports":
@@ -57,6 +58,8 @@ export default function Home() {
         return userRole === "admin" || userRole === "manager" ? <Users /> : <Dashboard userRole={userRole} />
       case "logs":
         return userRole === "admin" ? <Logs /> : <Dashboard userRole={userRole} />
+      case "settings":
+        return <Settings userRole={userRole} />
       case "template-builder":
         return <TemplateBuilder />
       default:

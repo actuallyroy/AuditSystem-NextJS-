@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress"
 import { Users, CheckSquare, AlertTriangle, TrendingUp, Calendar, MapPin, Clock } from "lucide-react"
 
 interface DashboardProps {
-  userRole: "admin" | "manager" | "supervisor"
+  userRole: "admin" | "manager" | "supervisor" | "auditor"
 }
 
 export function Dashboard({ userRole }: DashboardProps) {

@@ -1,8 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SettingsIcon, User, Building, Shield, Bell, Palette, Globe } from "lucide-react"
 import { ProfileSettings } from "@/components/settings/profile-settings"
@@ -13,7 +11,7 @@ import { AppearanceSettings } from "@/components/settings/appearance-settings"
 import { RegionalSettings } from "@/components/settings/regional-settings"
 
 interface SettingsProps {
-  userRole: "admin" | "manager" | "supervisor"
+  userRole: "admin" | "manager" | "supervisor" | "auditor"
 }
 
 export function Settings({ userRole }: SettingsProps) {
@@ -25,7 +23,7 @@ export function Settings({ userRole }: SettingsProps) {
       label: "Profile",
       icon: User,
       description: "Manage your personal information",
-      roles: ["admin", "manager", "supervisor"],
+      roles: ["admin", "manager", "supervisor", "auditor"],
     },
     {
       id: "organization",
@@ -39,107 +37,91 @@ export function Settings({ userRole }: SettingsProps) {
       label: "Security",
       icon: Shield,
       description: "Password and security settings",
-      roles: ["admin", "manager", "supervisor"],
+      roles: ["admin", "manager", "supervisor", "auditor"],
     },
     {
       id: "notifications",
       label: "Notifications",
       icon: Bell,
       description: "Configure notification preferences",
-      roles: ["admin", "manager", "supervisor"],
+      roles: ["admin", "manager", "supervisor", "auditor"],
     },
     {
       id: "appearance",
       label: "Appearance",
       icon: Palette,
       description: "Customize the interface",
-      roles: ["admin", "manager", "supervisor"],
+      roles: ["admin", "manager", "supervisor", "auditor"],
     },
     {
       id: "regional",
       label: "Regional",
       icon: Globe,
       description: "Language and regional settings",
-      roles: ["admin", "manager", "supervisor"],
+      roles: ["admin", "manager", "supervisor", "auditor"],
     },
   ]
 
   const filteredTabs = settingsTabs.filter((tab) => tab.roles.includes(userRole))
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <SettingsIcon className="h-6 w-6" />
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-blue-100 rounded-lg">
+          <SettingsIcon className="h-6 w-6 text-blue-600" />
+        </div>
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Settings</h2>
-          <p className="text-gray-600">Manage your account and organization preferences</p>
+          <h2 className="text-3xl font-bold text-gray-900">Settings</h2>
+          <p className="text-gray-600 mt-1">Manage your account and organization preferences</p>
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <div className="border-b">
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:grid-cols-none lg:flex">
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+        <div className="border-b border-gray-200">
+          <TabsList className="grid w-full grid-cols-6 h-auto p-1 bg-gray-50 rounded-lg">
             {filteredTabs.map((tab) => (
-              <TabsTrigger key={tab.id} value={tab.id} className="flex items-center gap-2">
-                <tab.icon className="h-4 w-4" />
-                <span className="hidden sm:inline">{tab.label}</span>
+              <TabsTrigger
+                key={tab.id}
+                value={tab.id}
+                className="flex flex-col items-center gap-2 py-4 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md transition-all"
+              >
+                <tab.icon className="h-5 w-5" />
+                <div className="text-center">
+                  <div className="font-medium text-sm">{tab.label}</div>
+                  <div className="text-xs text-gray-500 hidden sm:block mt-1">{tab.description}</div>
+                </div>
               </TabsTrigger>
             ))}
           </TabsList>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-4">
-          {/* Sidebar */}
-          <div className="lg:col-span-1">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Settings Menu</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {filteredTabs.map((tab) => (
-                  <Button
-                    key={tab.id}
-                    variant={activeTab === tab.id ? "default" : "ghost"}
-                    className="w-full justify-start"
-                    onClick={() => setActiveTab(tab.id)}
-                  >
-                    <tab.icon className="h-4 w-4 mr-2" />
-                    <div className="text-left">
-                      <div className="font-medium">{tab.label}</div>
-                      <div className="text-xs text-gray-500">{tab.description}</div>
-                    </div>
-                  </Button>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
+        {/* Content */}
+        <div className="min-h-[600px]">
+          <TabsContent value="profile" className="mt-0">
+            <ProfileSettings userRole={userRole} />
+          </TabsContent>
 
-          {/* Main Content */}
-          <div className="lg:col-span-3">
-            <TabsContent value="profile" className="mt-0">
-              <ProfileSettings userRole={userRole} />
-            </TabsContent>
+          <TabsContent value="organization" className="mt-0">
+            <OrganizationSettings userRole={userRole} />
+          </TabsContent>
 
-            <TabsContent value="organization" className="mt-0">
-              <OrganizationSettings userRole={userRole} />
-            </TabsContent>
+          <TabsContent value="security" className="mt-0">
+            <SecuritySettings userRole={userRole} />
+          </TabsContent>
 
-            <TabsContent value="security" className="mt-0">
-              <SecuritySettings userRole={userRole} />
-            </TabsContent>
+          <TabsContent value="notifications" className="mt-0">
+            <NotificationSettings userRole={userRole} />
+          </TabsContent>
 
-            <TabsContent value="notifications" className="mt-0">
-              <NotificationSettings userRole={userRole} />
-            </TabsContent>
+          <TabsContent value="appearance" className="mt-0">
+            <AppearanceSettings userRole={userRole} />
+          </TabsContent>
 
-            <TabsContent value="appearance" className="mt-0">
-              <AppearanceSettings userRole={userRole} />
-            </TabsContent>
-
-            <TabsContent value="regional" className="mt-0">
-              <RegionalSettings userRole={userRole} />
-            </TabsContent>
-          </div>
+          <TabsContent value="regional" className="mt-0">
+            <RegionalSettings userRole={userRole} />
+          </TabsContent>
         </div>
       </Tabs>
     </div>

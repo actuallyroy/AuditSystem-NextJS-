@@ -1,6 +1,16 @@
 "use client"
 
-import { BarChart3, FileText, ClipboardList, CheckSquare, PieChart, Users, Activity, Building2 } from "lucide-react"
+import {
+  BarChart3,
+  FileText,
+  ClipboardList,
+  CheckSquare,
+  PieChart,
+  Users,
+  Activity,
+  Building2,
+  Settings,
+} from "lucide-react"
 
 import {
   Sidebar,
@@ -18,7 +28,7 @@ import {
 interface AppSidebarProps {
   activeView: string
   setActiveView: (view: string) => void
-  userRole: "admin" | "manager" | "supervisor"
+  userRole: "admin" | "manager" | "supervisor" | "auditor"
 }
 
 export function AppSidebar({ activeView, setActiveView, userRole }: AppSidebarProps) {
@@ -27,7 +37,7 @@ export function AppSidebar({ activeView, setActiveView, userRole }: AppSidebarPr
       title: "Dashboard",
       icon: BarChart3,
       id: "dashboard",
-      roles: ["admin", "manager", "supervisor"],
+      roles: ["admin", "manager", "supervisor", "auditor"],
     },
     {
       title: "Templates",
@@ -43,13 +53,13 @@ export function AppSidebar({ activeView, setActiveView, userRole }: AppSidebarPr
       title: "Assignments",
       icon: ClipboardList,
       id: "assignments",
-      roles: ["admin", "manager", "supervisor"],
+      roles: ["admin", "manager", "supervisor", "auditor"],
     },
     {
       title: "Audits",
       icon: CheckSquare,
       id: "audits",
-      roles: ["admin", "manager", "supervisor"],
+      roles: ["admin", "manager", "supervisor", "auditor"],
     },
     {
       title: "Reports",
@@ -74,8 +84,18 @@ export function AppSidebar({ activeView, setActiveView, userRole }: AppSidebarPr
     },
   ]
 
+  const systemItems = [
+    {
+      title: "Settings",
+      icon: Settings,
+      id: "settings",
+      roles: ["admin", "manager", "supervisor", "auditor"],
+    },
+  ]
+
   const filteredMenuItems = menuItems.filter((item) => item.roles.includes(userRole))
   const filteredAdminItems = adminItems.filter((item) => item.roles.includes(userRole))
+  const filteredSystemItems = systemItems.filter((item) => item.roles.includes(userRole))
 
   return (
     <Sidebar className="border-r border-gray-200">
@@ -111,7 +131,6 @@ export function AppSidebar({ activeView, setActiveView, userRole }: AppSidebarPr
                           onClick={() => setActiveView("templates")}
                           isActive={activeView === "templates"}
                           className="w-full justify-start text-sm py-1 h-8"
-                          variant="ghost"
                         >
                           <span>All Templates</span>
                         </SidebarMenuButton>
@@ -119,7 +138,6 @@ export function AppSidebar({ activeView, setActiveView, userRole }: AppSidebarPr
                           onClick={() => setActiveView("template-builder")}
                           isActive={activeView === "template-builder"}
                           className="w-full justify-start text-sm py-1 h-8"
-                          variant="ghost"
                         >
                           <span>Create Template</span>
                         </SidebarMenuButton>
@@ -165,6 +183,26 @@ export function AppSidebar({ activeView, setActiveView, userRole }: AppSidebarPr
             </SidebarGroupContent>
           </SidebarGroup>
         )}
+
+        <SidebarGroup>
+          <SidebarGroupLabel>System</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {filteredSystemItems.map((item) => (
+                <SidebarMenuItem key={item.id}>
+                  <SidebarMenuButton
+                    onClick={() => setActiveView(item.id)}
+                    isActive={activeView === item.id}
+                    className="w-full justify-start"
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.title}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter className="p-4">

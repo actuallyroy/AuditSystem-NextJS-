@@ -1,86 +1,130 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Plus, Filter, Calendar, MapPin, User, Clock } from "lucide-react"
+import { Search, Plus, Filter, Calendar, MapPin, User, Clock, Loader2, AlertCircle, CheckCircle, RefreshCw } from "lucide-react"
 import { CreateAssignmentDialog } from "@/components/create-assignment-dialog"
+import { useAuth } from "@/lib/auth-context"
+import { assignmentService, Assignment, AssignmentStats, StoreInfo } from "@/lib/assignment-service"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-export function Assignments() {
+interface AssignmentsProps {
+  userRole?: "admin" | "manager" | "supervisor" | "auditor"
+}
+
+export function Assignments({ userRole }: AssignmentsProps) {
+  const { user, userDetails } = useAuth()
+  const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [stats, setStats] = useState<AssignmentStats>({
+    total: 0,
+    pending: 0,
+    inProgress: 0,
+    completed: 0,
+    overdue: 0,
+    cancelled: 0,
+  })
   const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [priorityFilter, setPriorityFilter] = useState<string>("all")
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  const assignments = [
-    {
-      id: "ASG-001",
-      template: "Store Compliance Check",
-      auditor: "Rajesh Kumar",
-      store: "Metro Store - Downtown",
-      location: "123 Main Street, Delhi",
-      status: "Pending",
-      priority: "High",
-      dueDate: "2025-01-15",
-      assignedDate: "2025-01-10",
-      estimatedDuration: "2 hours",
-    },
-    {
-      id: "ASG-002",
-      template: "Product Display Audit",
-      auditor: "Priya Sharma",
-      store: "SuperMart - Mall Road",
-      location: "456 Mall Road, Delhi",
-      status: "In Progress",
-      priority: "Medium",
-      dueDate: "2025-01-16",
-      assignedDate: "2025-01-11",
-      estimatedDuration: "1.5 hours",
-    },
-    {
-      id: "ASG-003",
-      template: "Inventory Check",
-      auditor: "Amit Singh",
-      store: "Quick Shop - Station",
-      location: "789 Station Road, Delhi",
-      status: "Completed",
-      priority: "Low",
-      dueDate: "2025-01-13",
-      assignedDate: "2025-01-08",
-      estimatedDuration: "3 hours",
-    },
-    {
-      id: "ASG-004",
-      template: "Customer Service Evaluation",
-      auditor: "Neha Patel",
-      store: "Big Bazaar - Central",
-      location: "321 Central Avenue, Delhi",
-      status: "Overdue",
-      priority: "High",
-      dueDate: "2025-01-12",
-      assignedDate: "2025-01-07",
-      estimatedDuration: "2.5 hours",
-    },
-  ]
+  // Load assignments data
+  const loadAssignments = async (showLoader = true) => {
+    if (!user?.token) return
 
-  const filteredAssignments = assignments.filter(
-    (assignment) =>
-      assignment.store.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      assignment.auditor.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      assignment.template.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      assignment.id.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+    try {
+      if (showLoader) {
+        setIsLoading(true)
+      } else {
+        setIsRefreshing(true)
+      }
+      setError(null)
+
+      let assignmentsData: Assignment[]
+
+      // Determine which assignments to load based on user role
+      if (userRole === "auditor") {
+        // Auditors see only their assignments
+        assignmentsData = await assignmentService.getMyAssignments(user.token)
+      } else {
+        // Admins, managers, supervisors see all assignments in their organization
+        assignmentsData = await assignmentService.getAssignments(
+          user.token,
+          userDetails?.organisationId
+        )
+      }
+
+      setAssignments(assignmentsData)
+
+      // Calculate stats
+      const statsData = await assignmentService.getAssignmentStats(
+        user.token,
+        userDetails?.organisationId
+      )
+      setStats(statsData)
+
+    } catch (err) {
+      console.error("Error loading assignments:", err)
+      setError(err instanceof Error ? err.message : "Failed to load assignments")
+      
+      // Fallback data for development
+      setAssignments([])
+      setStats({
+        total: 0,
+        pending: 0,
+        inProgress: 0,
+        completed: 0,
+        overdue: 0,
+        cancelled: 0,
+      })
+    } finally {
+      setIsLoading(false)
+      setIsRefreshing(false)
+    }
+  }
+
+  // Load data on component mount and when dependencies change
+  useEffect(() => {
+    if (user?.token) {
+      loadAssignments()
+    }
+  }, [user?.token, userDetails?.organisationId, userRole])
+
+  // Filter assignments based on search term and filters
+  const filteredAssignments = assignments.filter((assignment) => {
+    const storeInfo = assignmentService.parseStoreInfo(assignment.storeInfo)
+    const matchesSearch = 
+      storeInfo.storeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (assignment.assignedToName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (assignment.templateName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      assignment.assignmentId.toLowerCase().includes(searchTerm.toLowerCase())
+
+    const matchesStatus = statusFilter === "all" || assignment.status === statusFilter
+    const matchesPriority = priorityFilter === "all" || assignment.priority === priorityFilter
+
+    return matchesSearch && matchesStatus && matchesPriority
+  })
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Pending":
+      case "pending":
         return "secondary"
-      case "In Progress":
+      case "in_progress":
         return "default"
-      case "Completed":
+      case "completed":
+      case "fulfilled":
         return "outline"
-      case "Overdue":
+      case "cancelled":
+        return "destructive"
+      case "expired":
         return "destructive"
       default:
         return "outline"
@@ -89,15 +133,68 @@ export function Assignments() {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "High":
+      case "high":
         return "destructive"
-      case "Medium":
+      case "medium":
         return "default"
-      case "Low":
+      case "low":
         return "secondary"
       default:
         return "outline"
     }
+  }
+
+  const getStatusDisplay = (status: string) => {
+    switch (status) {
+      case "pending":
+        return "Pending"
+      case "in_progress":
+        return "In Progress"
+      case "completed":
+        return "Completed"
+      case "fulfilled":
+        return "Fulfilled"
+      case "cancelled":
+        return "Cancelled"
+      case "expired":
+        return "Expired"
+      default:
+        return status
+    }
+  }
+
+  const getPriorityDisplay = (priority: string) => {
+    return priority.charAt(0).toUpperCase() + priority.slice(1)
+  }
+
+  const formatDate = (dateString: string) => {
+    try {
+      return new Date(dateString).toLocaleDateString()
+    } catch {
+      return dateString
+    }
+  }
+
+  const isOverdue = (assignment: Assignment) => {
+    const dueDate = new Date(assignment.dueDate)
+    const now = new Date()
+    return assignment.status === "pending" && dueDate < now
+  }
+
+  const handleAssignmentCreated = () => {
+    // Refresh assignments after creating a new one
+    loadAssignments(false)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading assignments...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -105,23 +202,66 @@ export function Assignments() {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Assignments</h2>
-          <p className="text-gray-600">Manage audit assignments and schedules</p>
+          <p className="text-gray-600">
+            {userRole === "auditor" 
+              ? "View your assigned audits and schedules" 
+              : "Manage audit assignments and schedules"
+            }
+          </p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Create Assignment
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={() => loadAssignments(false)}
+            disabled={isRefreshing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          {(userRole === "admin" || userRole === "manager" || userRole === "supervisor") && (
+            <Button onClick={() => setShowCreateDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create Assignment
+            </Button>
+          )}
+        </div>
       </div>
 
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {error}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="ml-2"
+              onClick={() => loadAssignments()}
+            >
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Assignments</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">48</div>
-            <p className="text-xs text-muted-foreground">+8 this week</p>
+            <div className="text-2xl font-bold">{stats.total}</div>
+            <p className="text-xs text-muted-foreground">All assignments</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.pending}</div>
+            <p className="text-xs text-muted-foreground">Awaiting start</p>
           </CardContent>
         </Card>
         <Card>
@@ -129,8 +269,8 @@ export function Assignments() {
             <CardTitle className="text-sm font-medium">In Progress</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
-            <p className="text-xs text-muted-foreground">25% of total</p>
+            <div className="text-2xl font-bold">{stats.inProgress}</div>
+            <p className="text-xs text-muted-foreground">Currently active</p>
           </CardContent>
         </Card>
         <Card>
@@ -138,7 +278,7 @@ export function Assignments() {
             <CardTitle className="text-sm font-medium">Overdue</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">3</div>
+            <div className="text-2xl font-bold text-red-600">{stats.overdue}</div>
             <p className="text-xs text-muted-foreground">Needs attention</p>
           </CardContent>
         </Card>
@@ -147,15 +287,15 @@ export function Assignments() {
             <CardTitle className="text-sm font-medium">Completed</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">33</div>
-            <p className="text-xs text-muted-foreground">69% completion rate</p>
+            <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
+            <p className="text-xs text-muted-foreground">Successfully finished</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Search and Filters */}
-      <div className="flex gap-4">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex gap-4 flex-wrap">
+        <div className="relative flex-1 min-w-64">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
             placeholder="Search assignments..."
@@ -164,81 +304,138 @@ export function Assignments() {
             className="pl-10"
           />
         </div>
-        <Button variant="outline">
-          <Filter className="h-4 w-4 mr-2" />
-          Filter
-        </Button>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="All Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="in_progress">In Progress</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+            <SelectItem value="expired">Expired</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="All Priority" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Priority</SelectItem>
+            <SelectItem value="high">High</SelectItem>
+            <SelectItem value="medium">Medium</SelectItem>
+            <SelectItem value="low">Low</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Assignments Table */}
       <Card>
         <CardHeader>
-          <CardTitle>All Assignments</CardTitle>
-          <CardDescription>{filteredAssignments.length} assignments found</CardDescription>
+          <CardTitle>
+            {userRole === "auditor" ? "My Assignments" : "All Assignments"}
+          </CardTitle>
+          <CardDescription>
+            {filteredAssignments.length} assignment{filteredAssignments.length !== 1 ? 's' : ''} found
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Assignment</TableHead>
-                <TableHead>Auditor</TableHead>
-                <TableHead>Store</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead>Due Date</TableHead>
-                <TableHead>Duration</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredAssignments.map((assignment) => (
-                <TableRow key={assignment.id}>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{assignment.template}</div>
-                      <div className="text-sm text-gray-500">{assignment.id}</div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-gray-400" />
-                      {assignment.auditor}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="font-medium">{assignment.store}</div>
-                      <div className="text-sm text-gray-500 flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {assignment.location}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getStatusColor(assignment.status)}>{assignment.status}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={getPriorityColor(assignment.priority)}>{assignment.priority}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1 text-sm">
-                      <Calendar className="h-3 w-3 text-gray-400" />
-                      {assignment.dueDate}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1 text-sm">
-                      <Clock className="h-3 w-3 text-gray-400" />
-                      {assignment.estimatedDuration}
-                    </div>
-                  </TableCell>
+          {filteredAssignments.length === 0 ? (
+            <div className="text-center py-8">
+              <CheckCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Assignments</h3>
+              <p className="text-gray-600">
+                {searchTerm || statusFilter !== "all" || priorityFilter !== "all"
+                  ? "No assignments match your current filters."
+                  : "No assignments found."
+                }
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Assignment</TableHead>
+                  <TableHead>Auditor</TableHead>
+                  <TableHead>Store</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Priority</TableHead>
+                  <TableHead>Due Date</TableHead>
+                  <TableHead>Created</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredAssignments.map((assignment) => {
+                  const storeInfo = assignmentService.parseStoreInfo(assignment.storeInfo)
+                  const overdue = isOverdue(assignment)
+                  
+                  return (
+                    <TableRow key={assignment.assignmentId} className={overdue ? "bg-red-50" : ""}>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{assignment.templateName || 'Unknown Template'}</div>
+                          <div className="text-sm text-gray-500">{assignment.assignmentId}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-gray-400" />
+                          {assignment.assignedToName || 'Unknown Auditor'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{storeInfo.storeName}</div>
+                          <div className="text-sm text-gray-500 flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {storeInfo.storeAddress}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={getStatusColor(assignment.status)}>
+                            {getStatusDisplay(assignment.status)}
+                          </Badge>
+                          {overdue && (
+                            <Badge variant="destructive" className="text-xs">
+                              Overdue
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getPriorityColor(assignment.priority)}>
+                          {getPriorityDisplay(assignment.priority)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-sm">
+                          <Calendar className="h-3 w-3 text-gray-400" />
+                          {formatDate(assignment.dueDate)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-sm text-gray-500">
+                          <Clock className="h-3 w-3" />
+                          {formatDate(assignment.createdAt)}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
-      <CreateAssignmentDialog open={showCreateDialog} onOpenChange={setShowCreateDialog} />
+      <CreateAssignmentDialog 
+        open={showCreateDialog} 
+        onOpenChange={setShowCreateDialog}
+        onAssignmentCreated={handleAssignmentCreated}
+      />
     </div>
   )
 }
