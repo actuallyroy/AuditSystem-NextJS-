@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { X, Plus, Trash2, GripVertical } from "lucide-react"
+import { ConditionalLogicPanel } from "@/components/conditional-logic-panel"
 
 interface Question {
   id: string
@@ -21,15 +22,25 @@ interface Question {
   options?: string[]
   validation?: any
   scoring?: number
+  conditionalLogic?: any[]
+}
+
+interface Section {
+  id: string
+  title: string
+  description?: string
+  questions: Question[]
 }
 
 interface QuestionConfigPanelProps {
   question: Question
+  allQuestions: Question[]
+  sections: Section[]
   onUpdate: (updates: Partial<Question>) => void
   onClose: () => void
 }
 
-export function QuestionConfigPanel({ question, onUpdate, onClose }: QuestionConfigPanelProps) {
+export function QuestionConfigPanel({ question, allQuestions, sections, onUpdate, onClose }: QuestionConfigPanelProps) {
   const [localQuestion, setLocalQuestion] = useState(question)
 
   const updateLocalQuestion = (updates: Partial<Question>) => {
@@ -308,6 +319,14 @@ export function QuestionConfigPanel({ question, onUpdate, onClose }: QuestionCon
               </div>
             </div>
           )}
+
+          {/* Conditional Logic */}
+          <ConditionalLogicPanel
+            question={localQuestion}
+            allQuestions={allQuestions}
+            sections={sections}
+            onUpdate={updateLocalQuestion}
+          />
 
           {/* Preview */}
           <div className="space-y-2">

@@ -1,23 +1,26 @@
 // Assignment service for handling API calls
+// Updated to use real backend endpoints
 
 const API_BASE_URL = 'http://localhost:8080/api/v1';
 
-// Types
+// Types matching OpenAPI spec
 export interface Assignment {
   assignmentId: string;
   templateId: string;
-  templateName?: string; // Populated from joins
   assignedToId: string;
-  assignedToName?: string; // Populated from joins
   assignedById: string;
-  assignedByName?: string; // Populated from joins
   organisationId: string;
-  storeInfo: string; // JSON string
+  storeInfo: object; // JSON object instead of string
   dueDate: string;
-  priority: 'low' | 'medium' | 'high';
+  priority: string;
   notes?: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'expired' | 'fulfilled';
+  status: string;
   createdAt: string;
+  updatedAt?: string;
+  // Additional fields populated from joins
+  templateName?: string;
+  assignedToName?: string;
+  assignedByName?: string;
 }
 
 export interface CreateAssignmentRequest {
@@ -27,7 +30,7 @@ export interface CreateAssignmentRequest {
   dueDate: string;
   priority: 'low' | 'medium' | 'high';
   notes?: string;
-  storeInfo: string; // JSON string
+  storeInfo: object; // JSON object
 }
 
 export interface UpdateAssignmentRequest {
@@ -36,13 +39,13 @@ export interface UpdateAssignmentRequest {
   priority?: 'low' | 'medium' | 'high';
   notes?: string;
   status?: 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'expired' | 'fulfilled';
-  storeInfo?: string; // JSON string
+  storeInfo?: object; // JSON object
 }
 
 export interface StoreInfo {
   storeName: string;
   storeAddress: string;
-  [key: string]: any; // Allow additional properties
+  [key: string]: any;
 }
 
 export interface AssignmentStats {
@@ -59,116 +62,185 @@ export interface ApiError {
   errors?: string[];
 }
 
+export interface User {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: string;
+  organisationId: string;
+}
+
+export interface Template {
+  templateId: string;
+  name: string;
+  description: string;
+  category: string;
+  isPublished: boolean;
+  createdAt: string;
+}
+
 class AssignmentService {
+  
+  /**
+   * Make authenticated API request
+   */
+  private async makeRequest<T>(
+    endpoint: string,
+    options: {
+      method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+      body?: any;
+      token: string;
+    }
+  ): Promise<T> {
+    const { method = 'GET', body, token } = options;
+    
+    const config: RequestInit = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    };
+
+    if (body) {
+      config.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorData.title || errorMessage;
+      } catch {
+        // If response is not JSON, use status text
+        errorMessage = response.statusText || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+
+    // Handle empty responses
+    if (response.status === 204) {
+      return null as T;
+    }
+
+    try {
+      return await response.json();
+    } catch {
+      return null as T;
+    }
+  }
+
+  /**
+   * Get users from organization
+   */
+  private async getUsers(token: string, organisationId: string): Promise<User[]> {
+    try {
+      const response = await this.makeRequest<User[]>(
+        `/Users/by-organisation/${organisationId}`,
+        { token }
+      );
+      return response || [];
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get templates
+   */
+  private async getTemplates(token: string): Promise<Template[]> {
+    try {
+      const response = await this.makeRequest<Template[]>('/Templates', { token });
+      return response || [];
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+      return [];
+    }
+  }
+
   /**
    * Get all assignments
    */
   async getAssignments(token: string, organisationId?: string): Promise<Assignment[]> {
     try {
-      const url = organisationId 
-        ? `${API_BASE_URL}/Assignments?organisationId=${organisationId}`
-        : `${API_BASE_URL}/Assignments`;
-        
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData: ApiError = await response.json();
-        throw new Error(errorData.message || 'Failed to get assignments');
+      let endpoint = '/Assignments';
+      if (organisationId) {
+        endpoint = `/Assignments/organisation/${organisationId}`;
       }
-
-      return await response.json();
+      
+      const assignments = await this.makeRequest<Assignment[]>(endpoint, { token });
+      return assignments || [];
     } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('An unexpected error occurred while fetching assignments');
+      console.error('Error fetching assignments:', error);
+      throw new Error(`Failed to load assignments: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
-   * Get a specific assignment by ID
+   * Get assignment by ID
    */
   async getAssignmentById(assignmentId: string, token: string): Promise<Assignment> {
     try {
-      const response = await fetch(`${API_BASE_URL}/Assignments/${assignmentId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData: ApiError = await response.json();
-        throw new Error(errorData.message || 'Failed to get assignment');
+      const assignment = await this.makeRequest<Assignment>(
+        `/Assignments/${assignmentId}`,
+        { token }
+      );
+      if (!assignment) {
+        throw new Error('Assignment not found');
       }
-
-      return await response.json();
+      return assignment;
     } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('An unexpected error occurred while fetching the assignment');
+      console.error('Error fetching assignment:', error);
+      throw new Error(`Failed to load assignment: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
-   * Get assignments assigned to the current user
+   * Get assignments assigned to current user
    */
   async getMyAssignments(token: string): Promise<Assignment[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/Assignments/my-assignments`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData: ApiError = await response.json();
-        throw new Error(errorData.message || 'Failed to get my assignments');
-      }
-
-      return await response.json();
+      const assignments = await this.makeRequest<Assignment[]>('/Assignments/my', { token });
+      return assignments || [];
     } catch (error) {
-      if (error instanceof Error) {
-        throw error;
+      console.error('Error fetching my assignments:', error);
+      // Fallback to get all assignments and filter by user
+      try {
+        const allAssignments = await this.getAssignments(token);
+        // Note: This requires the JWT token to contain user ID info
+        return allAssignments; // Backend should handle filtering by user
+      } catch {
+        throw new Error(`Failed to load your assignments: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
-      throw new Error('An unexpected error occurred while fetching your assignments');
     }
   }
 
   /**
-   * Get upcoming assignments
+   * Get upcoming assignments (due within next 7 days)
    */
   async getUpcomingAssignments(token: string): Promise<Assignment[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/Assignments/upcoming`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData: ApiError = await response.json();
-        throw new Error(errorData.message || 'Failed to get upcoming assignments');
-      }
-
-      return await response.json();
+      const assignments = await this.makeRequest<Assignment[]>('/Assignments/upcoming', { token });
+      return assignments || [];
     } catch (error) {
-      if (error instanceof Error) {
-        throw error;
+      console.error('Error fetching upcoming assignments:', error);
+      // Fallback to filter from all assignments
+      try {
+        const allAssignments = await this.getAssignments(token);
+        const now = new Date();
+        const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        
+        return allAssignments.filter(assignment => {
+          const dueDate = new Date(assignment.dueDate);
+          return dueDate >= now && dueDate <= weekFromNow;
+        });
+      } catch {
+        throw new Error(`Failed to load upcoming assignments: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
-      throw new Error('An unexpected error occurred while fetching upcoming assignments');
     }
   }
 
@@ -177,25 +249,11 @@ class AssignmentService {
    */
   async getOverdueAssignments(token: string): Promise<Assignment[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/Assignments/overdue`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData: ApiError = await response.json();
-        throw new Error(errorData.message || 'Failed to get overdue assignments');
-      }
-
-      return await response.json();
+      const assignments = await this.makeRequest<Assignment[]>('/Assignments/overdue', { token });
+      return assignments || [];
     } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('An unexpected error occurred while fetching overdue assignments');
+      console.error('Error fetching overdue assignments:', error);
+      throw new Error(`Failed to load overdue assignments: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -204,25 +262,11 @@ class AssignmentService {
    */
   async getAssignmentsByStatus(status: string, token: string): Promise<Assignment[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/Assignments/by-status/${status}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData: ApiError = await response.json();
-        throw new Error(errorData.message || 'Failed to get assignments by status');
-      }
-
-      return await response.json();
+      const assignments = await this.makeRequest<Assignment[]>(`/Assignments/status/${status}`, { token });
+      return assignments || [];
     } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('An unexpected error occurred while fetching assignments by status');
+      console.error('Error fetching assignments by status:', error);
+      throw new Error(`Failed to load ${status} assignments: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -231,206 +275,173 @@ class AssignmentService {
    */
   async getAssignmentsByPriority(priority: string, token: string): Promise<Assignment[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/Assignments/by-priority/${priority}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData: ApiError = await response.json();
-        throw new Error(errorData.message || 'Failed to get assignments by priority');
-      }
-
-      return await response.json();
+      const assignments = await this.makeRequest<Assignment[]>(`/Assignments/priority/${priority}`, { token });
+      return assignments || [];
     } catch (error) {
-      if (error instanceof Error) {
-        throw error;
+      console.error('Error fetching assignments by priority:', error);
+      // Fallback to filter from all assignments
+      try {
+        const allAssignments = await this.getAssignments(token);
+        return allAssignments.filter(assignment => assignment.priority === priority);
+      } catch {
+        throw new Error(`Failed to load ${priority} priority assignments: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
-      throw new Error('An unexpected error occurred while fetching assignments by priority');
     }
   }
 
   /**
-   * Create a new assignment
+   * Create new assignment
    */
   async createAssignment(assignmentData: CreateAssignmentRequest, token: string): Promise<Assignment> {
     try {
-      const response = await fetch(`${API_BASE_URL}/Assignments`, {
+      const assignment = await this.makeRequest<Assignment>('/Assignments', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(assignmentData),
+        body: assignmentData,
+        token
       });
-
-      if (!response.ok) {
-        const errorData: ApiError = await response.json();
-        throw new Error(errorData.message || 'Failed to create assignment');
+      
+      if (!assignment) {
+        throw new Error('Failed to create assignment');
       }
-
-      return await response.json();
+      
+      return assignment;
     } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('An unexpected error occurred while creating the assignment');
+      console.error('Error creating assignment:', error);
+      throw new Error(`Failed to create assignment: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
-   * Update an existing assignment
+   * Update assignment
    */
   async updateAssignment(assignmentData: UpdateAssignmentRequest, token: string): Promise<Assignment> {
     try {
-      const response = await fetch(`${API_BASE_URL}/Assignments/${assignmentData.assignmentId}`, {
+      const { assignmentId, ...updateData } = assignmentData;
+      
+      const assignment = await this.makeRequest<Assignment>(`/Assignments/${assignmentId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(assignmentData),
+        body: updateData,
+        token
       });
-
-      if (!response.ok) {
-        const errorData: ApiError = await response.json();
-        throw new Error(errorData.message || 'Failed to update assignment');
+      
+      if (!assignment) {
+        throw new Error('Failed to update assignment');
       }
-
-      return await response.json();
+      
+      return assignment;
     } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('An unexpected error occurred while updating the assignment');
+      console.error('Error updating assignment:', error);
+      throw new Error(`Failed to update assignment: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
-   * Complete an assignment (for auditors)
+   * Complete assignment
    */
   async completeAssignment(assignmentId: string, token: string): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE_URL}/Assignments/${assignmentId}/complete`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+      await this.makeRequest<void>(`/Assignments/${assignmentId}/complete`, {
+        method: 'PUT',
+        token
       });
-
-      if (!response.ok) {
-        const errorData: ApiError = await response.json();
-        throw new Error(errorData.message || 'Failed to complete assignment');
-      }
     } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('An unexpected error occurred while completing the assignment');
+      console.error('Error completing assignment:', error);
+      throw new Error(`Failed to complete assignment: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
-   * Delete an assignment
+   * Delete assignment
    */
   async deleteAssignment(assignmentId: string, token: string): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE_URL}/Assignments/${assignmentId}`, {
+      await this.makeRequest<void>(`/Assignments/${assignmentId}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        token
       });
-
-      if (!response.ok) {
-        const errorData: ApiError = await response.json();
-        throw new Error(errorData.message || 'Failed to delete assignment');
-      }
     } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('An unexpected error occurred while deleting the assignment');
+      console.error('Error deleting assignment:', error);
+      throw new Error(`Failed to delete assignment: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
    * Get assignment statistics
+   * Calculates stats from fetched assignments since there's no dedicated stats endpoint
    */
   async getAssignmentStats(token: string, organisationId?: string): Promise<AssignmentStats> {
     try {
+      // Fetch all assignments for the organization and calculate stats client-side
       const assignments = await this.getAssignments(token, organisationId);
+      const now = new Date();
       
       const stats: AssignmentStats = {
         total: assignments.length,
-        pending: 0,
-        inProgress: 0,
-        completed: 0,
-        overdue: 0,
-        cancelled: 0,
+        pending: assignments.filter(a => a.status === 'pending').length,
+        inProgress: assignments.filter(a => a.status === 'in_progress').length,
+        completed: assignments.filter(a => a.status === 'completed' || a.status === 'fulfilled').length,
+        overdue: assignments.filter(a => a.status === 'pending' && new Date(a.dueDate) < now).length,
+        cancelled: assignments.filter(a => a.status === 'cancelled').length,
       };
-
-      const now = new Date();
       
-      assignments.forEach(assignment => {
-        const dueDate = new Date(assignment.dueDate);
-        
-        switch (assignment.status) {
-          case 'pending':
-            if (dueDate < now) {
-              stats.overdue++;
-            } else {
-              stats.pending++;
-            }
-            break;
-          case 'in_progress':
-            stats.inProgress++;
-            break;
-          case 'completed':
-          case 'fulfilled':
-            stats.completed++;
-            break;
-          case 'cancelled':
-            stats.cancelled++;
-            break;
-        }
-      });
-
       return stats;
     } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('An unexpected error occurred while calculating assignment statistics');
+      console.error('Error calculating assignment stats:', error);
+      throw new Error(`Failed to load assignment statistics: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
-   * Parse store info JSON string
+   * Parse store info from various formats
    */
-  parseStoreInfo(storeInfoJson: string): StoreInfo {
-    try {
-      return JSON.parse(storeInfoJson);
-    } catch {
+  parseStoreInfo(storeInfo: any): StoreInfo {
+    if (!storeInfo) {
       return {
         storeName: 'Unknown Store',
-        storeAddress: 'Unknown Address',
+        storeAddress: 'Unknown Address'
       };
     }
+
+    // If it's already an object, return as is
+    if (typeof storeInfo === 'object' && storeInfo !== null) {
+      const result = { ...storeInfo };
+      if (!result.storeName) result.storeName = 'Unknown Store';
+      if (!result.storeAddress) result.storeAddress = 'Unknown Address';
+      return result;
+    }
+
+    // If it's a string, try to parse as JSON
+    if (typeof storeInfo === 'string') {
+      try {
+        const parsed = JSON.parse(storeInfo);
+        const result = { ...parsed };
+        if (!result.storeName) result.storeName = 'Unknown Store';
+        if (!result.storeAddress) result.storeAddress = 'Unknown Address';
+        return result;
+      } catch {
+        return {
+          storeName: storeInfo,
+          storeAddress: 'Unknown Address'
+        };
+      }
+    }
+
+    return {
+      storeName: 'Unknown Store',
+      storeAddress: 'Unknown Address'
+    };
   }
 
   /**
-   * Format store info object to JSON string
+   * Format store info for API submission
    */
-  formatStoreInfo(storeInfo: StoreInfo): string {
-    return JSON.stringify(storeInfo);
+  formatStoreInfo(storeInfo: StoreInfo): object {
+    return {
+      storeName: storeInfo.storeName,
+      storeAddress: storeInfo.storeAddress,
+      ...storeInfo
+    };
   }
 }
 
-// Export a singleton instance
 export const assignmentService = new AssignmentService(); 

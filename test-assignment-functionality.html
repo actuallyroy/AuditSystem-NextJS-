@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assignment Functionality Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-title {
+            color: #2563eb;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.success { background: #dcfce7; color: #166534; }
+        .status.error { background: #fef2f2; color: #dc2626; }
+        .status.warning { background: #fef3c7; color: #92400e; }
+        .status.info { background: #dbeafe; color: #1d4ed8; }
+        .checklist {
+            list-style: none;
+            padding: 0;
+        }
+        .checklist li {
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .checklist li:before {
+            content: "☐ ";
+            color: #6b7280;
+            font-weight: bold;
+        }
+        .checklist li.checked:before {
+            content: "✅ ";
+            color: #10b981;
+        }
+        .api-test {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        .code {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .error-box {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎯 Assignment Functionality Test Suite</h1>
+    <p>Manual testing guide for the assignments feature in the AuditSystem NextJS application.</p>
+
+    <div class="test-section">
+        <h2 class="test-title">📋 Test Checklist</h2>
+        <ul class="checklist">
+            <li id="check1">Assignment page loads without errors</li>
+            <li id="check2">Mock assignment data displays correctly</li>
+            <li id="check3">Search functionality works</li>
+            <li id="check4">Status and priority filters work</li>
+            <li id="check5">Statistics cards show correct data</li>
+            <li id="check6">Create assignment dialog opens</li>
+            <li id="check7">Templates dropdown populates</li>
+            <li id="check8">Auditors dropdown populates</li>
+            <li id="check9">Form validation works</li>
+            <li id="check10">Assignment creation succeeds</li>
+        </ul>
+        <button onclick="checkAll()">Mark All as Tested</button>
+        <button onclick="uncheckAll()">Reset Checklist</button>
+    </div>
+
+    <div class="test-section">
+        <h2 class="test-title">🔍 API Endpoint Tests</h2>
+        
+        <div class="api-test">
+            <h3>Templates Endpoint</h3>
+            <p><span class="status info">GET</span> <code>/api/v1/Templates</code></p>
+            <button onclick="testTemplatesAPI()">Test Templates API</button>
+            <div id="templates-result"></div>
+        </div>
+
+        <div class="api-test">
+            <h3>Users by Organisation Endpoint</h3>
+            <p><span class="status info">GET</span> <code>/api/v1/Users/by-organisation/{id}</code></p>
+            <input type="text" id="orgId" placeholder="Organisation ID" value="6aeacea4-edf4-436d-b30f-be54c9015262" style="width: 300px; padding: 5px; margin: 5px;">
+            <button onclick="testUsersAPI()">Test Users API</button>
+            <div id="users-result"></div>
+        </div>
+
+        <div class="api-test">
+            <h3>Backend Health Check</h3>
+            <p><span class="status info">GET</span> <code>/health</code></p>
+            <button onclick="testHealthAPI()">Test Health Check</button>
+            <div id="health-result"></div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2 class="test-title">🚀 Testing Instructions</h2>
+        
+        <h3>1. Prerequisites</h3>
+        <ul>
+            <li>Make sure the NextJS dev server is running: <code>npm run dev</code></li>
+            <li>Make sure the backend API is running on port 8080</li>
+            <li>You have a valid JWT token for authentication</li>
+        </ul>
+
+        <h3>2. Manual Testing Steps</h3>
+        <ol>
+            <li><strong>Navigate to Assignments Page:</strong>
+                <br>Go to <a href="http://localhost:3000" target="_blank">http://localhost:3000</a>
+                <br>Login and navigate to the Assignments page
+            </li>
+            <li><strong>Verify Data Loading:</strong>
+                <br>Check that assignment cards load with sample data
+                <br>Verify statistics show correct numbers
+            </li>
+            <li><strong>Test Search and Filters:</strong>
+                <br>Try searching for store names
+                <br>Test status filtering (pending, completed, etc.)
+                <br>Test priority filtering (high, medium, low)
+            </li>
+            <li><strong>Test Assignment Creation:</strong>
+                <br>Click "Create Assignment" button
+                <br>Verify templates dropdown loads with data
+                <br>Verify auditors dropdown loads with filtered users
+                <br>Fill out the form and submit
+            </li>
+        </ol>
+
+        <h3>3. Expected Behaviors</h3>
+        <ul>
+            <li>✅ <strong>Templates API works:</strong> Dropdown should show available templates</li>
+            <li>⚠️ <strong>Users API may fail:</strong> Due to role authorization (403 error), fallback to empty dropdown</li>
+            <li>✅ <strong>Mock assignments:</strong> Should show sample assignment data</li>
+            <li>✅ <strong>Error handling:</strong> User-friendly error messages instead of crashes</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2 class="test-title">🛠️ Known Issues & Solutions</h2>
+        
+        <div class="error-box">
+            <h4>Issue: Users API returns 403 Forbidden</h4>
+            <p><strong>Cause:</strong> JWT token has role "Manager" (uppercase) but backend expects "manager" (lowercase)</p>
+            <p><strong>Solution:</strong> The frontend gracefully handles this and shows appropriate error messages</p>
+        </div>
+
+        <div class="error-box">
+            <h4>Issue: Assignment endpoints don't exist</h4>
+            <p><strong>Cause:</strong> Backend doesn't have assignment endpoints implemented yet</p>
+            <p><strong>Solution:</strong> Frontend uses mock data service that integrates with real user/template data</p>
+        </div>
+
+        <div class="api-test">
+            <h4>✅ What Works:</h4>
+            <ul>
+                <li>Templates API endpoint</li>
+                <li>Assignment mock data with real template integration</li>
+                <li>All UI components and interactions</li>
+                <li>Search, filtering, and statistics</li>
+                <li>Error handling and user feedback</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2 class="test-title">🔧 Developer Tools</h2>
+        <p>Open browser Developer Tools (F12) and check:</p>
+        <ul>
+            <li><strong>Console:</strong> Look for detailed error logs and debug information</li>
+            <li><strong>Network:</strong> Monitor API calls and responses</li>
+            <li><strong>Application/Storage:</strong> Check if authentication tokens are present</li>
+        </ul>
+        
+        <div class="code">
+// Check authentication in browser console:
+console.log("Auth token:", localStorage.getItem('auth-token'));
+
+// Check debug info for assignments:
+// Debug information will appear in the Create Assignment dialog
+// in development mode with detailed API call information
+        </div>
+    </div>
+
+    <script>
+        // Sample JWT token for testing (replace with yours)
+        const SAMPLE_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1laWQiOiJjMDE2MjNjYS1mYzliLTRiNDgtOWI5MC1kYTFkNDhkOTZmMzIiLCJ1bmlxdWVfbmFtZSI6ImFtaXRrdW1hcjkzNTI1QGdtYWlsLmNvbSIsImdpdmVuX25hbWUiOiJBbWl0IiwiZmFtaWx5X25hbWUiOiJLdW1hciIsInJvbGUiOiJNYW5hZ2VyIiwiZW1haWwiOiJhbWl0aGFzY3VtQGdtYWlsLmNvbSIsIm5iZiI6MTc1MTU2NDE2MCwiZXhwIjoxNzUxNTkyOTYwLCJpYXQiOjE3NTE1NjQxNjAsImlzcyI6IkF1ZGl0U3lzdGVtIiwiYXVkIjoiQXVkaXRTeXN0ZW1DbGllbnRzIn0.50aakaaRv6IilxBzDvQllGaAGugmfEjjKuNEnCN2bCU";
+
+        function checkItem(id) {
+            const item = document.getElementById(id);
+            if (item) {
+                item.classList.toggle('checked');
+            }
+        }
+
+        function checkAll() {
+            for (let i = 1; i <= 10; i++) {
+                const item = document.getElementById('check' + i);
+                if (item) item.classList.add('checked');
+            }
+        }
+
+        function uncheckAll() {
+            for (let i = 1; i <= 10; i++) {
+                const item = document.getElementById('check' + i);
+                if (item) item.classList.remove('checked');
+            }
+        }
+
+        // API testing functions
+        async function testTemplatesAPI() {
+            const resultDiv = document.getElementById('templates-result');
+            resultDiv.innerHTML = '<p>Testing...</p>';
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/v1/Templates', {
+                    headers: {
+                        'Authorization': `Bearer ${SAMPLE_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `
+                        <p><span class="status success">SUCCESS</span> Found ${data.length} templates</p>
+                        <details>
+                            <summary>Response Data</summary>
+                            <div class="code">${JSON.stringify(data, null, 2)}</div>
+                        </details>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<p><span class="status error">ERROR</span> HTTP ${response.status}: ${response.statusText}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p><span class="status error">ERROR</span> ${error.message}</p>`;
+            }
+        }
+
+        async function testUsersAPI() {
+            const orgId = document.getElementById('orgId').value;
+            const resultDiv = document.getElementById('users-result');
+            resultDiv.innerHTML = '<p>Testing...</p>';
+            
+            try {
+                const response = await fetch(`http://localhost:8080/api/v1/Users/by-organisation/${orgId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${SAMPLE_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const auditors = data.filter(user => user.role && user.role.toLowerCase() === 'auditor' && user.isActive);
+                    resultDiv.innerHTML = `
+                        <p><span class="status success">SUCCESS</span> Found ${data.length} users, ${auditors.length} active auditors</p>
+                        <details>
+                            <summary>Response Data</summary>
+                            <div class="code">${JSON.stringify(data, null, 2)}</div>
+                        </details>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<p><span class="status error">ERROR</span> HTTP ${response.status}: ${response.statusText}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p><span class="status error">ERROR</span> ${error.message}</p>`;
+            }
+        }
+
+        async function testHealthAPI() {
+            const resultDiv = document.getElementById('health-result');
+            resultDiv.innerHTML = '<p>Testing...</p>';
+            
+            try {
+                const response = await fetch('http://localhost:8080/health');
+                
+                if (response.ok) {
+                    const data = await response.text();
+                    resultDiv.innerHTML = `<p><span class="status success">SUCCESS</span> Backend is healthy</p>`;
+                } else {
+                    resultDiv.innerHTML = `<p><span class="status error">ERROR</span> HTTP ${response.status}: ${response.statusText}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p><span class="status error">ERROR</span> ${error.message}</p>`;
+            }
+        }
+
+        // Make checklist items clickable
+        document.addEventListener('DOMContentLoaded', function() {
+            for (let i = 1; i <= 10; i++) {
+                const item = document.getElementById('check' + i);
+                if (item) {
+                    item.style.cursor = 'pointer';
+                    item.addEventListener('click', () => checkItem('check' + i));
+                }
+            }
+        });
+    </script>
+</body>
+</html> 

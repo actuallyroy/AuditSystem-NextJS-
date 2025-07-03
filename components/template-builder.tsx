@@ -36,6 +36,16 @@ import { Template as APITemplate, templateService } from "@/lib/template-service
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
 
+// Add conditional logic interfaces
+interface ConditionalLogic {
+  id: string
+  sourceQuestionId: string
+  condition: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty'
+  value: string | number | boolean
+  action: 'show' | 'hide' | 'skip'
+  targetQuestionIds: string[]
+}
+
 interface Question {
   id: string
   type: string
@@ -45,6 +55,7 @@ interface Question {
   options?: string[]
   validation?: any
   scoring?: number
+  conditionalLogic?: ConditionalLogic[]
 }
 
 interface Section {
@@ -94,6 +105,7 @@ export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
                 maxValue: q.maxValue,
               },
               scoring: parsedScoringRules.questionScores[q.id] || 1,
+              conditionalLogic: q.conditionalLogic || [],
             }))
           })),
         };
@@ -344,7 +356,8 @@ export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
             required: q.required,
             options: q.options,
             minValue: q.validation?.minValue,
-            maxValue: q.validation?.maxValue
+            maxValue: q.validation?.maxValue,
+            conditionalLogic: q.conditionalLogic || []
           }))
         }))
       }
@@ -601,6 +614,11 @@ export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
                                           Required
                                         </Badge>
                                       )}
+                                      {question.conditionalLogic && question.conditionalLogic.length > 0 && (
+                                        <Badge variant="secondary" className="text-xs">
+                                          ⚡ Logic: {question.conditionalLogic.length}
+                                        </Badge>
+                                      )}
                                     </div>
                                     <p className="text-sm text-gray-500 capitalize">{question.type} question</p>
                                   </div>
@@ -659,6 +677,8 @@ export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
         {selectedQuestion && (
           <QuestionConfigPanel
             question={selectedQuestion}
+            allQuestions={template.sections.flatMap(s => s.questions)}
+            sections={template.sections}
             onUpdate={(updates) => {
               const section = template.sections.find((s) => s.questions.some((q) => q.id === selectedQuestion.id))
               if (section) {

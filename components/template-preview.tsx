@@ -14,6 +14,15 @@ import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import { ArrowLeft, ArrowRight, Save, Star, Camera, MapPin, Upload, CheckCircle, AlertCircle } from "lucide-react"
 
+interface ConditionalLogic {
+  id: string
+  sourceQuestionId: string
+  condition: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty'
+  value: string | number | boolean
+  action: 'show' | 'hide' | 'skip'
+  targetQuestionIds: string[]
+}
+
 interface Question {
   id: string
   type: string
@@ -23,6 +32,7 @@ interface Question {
   options?: string[]
   validation?: any
   scoring?: number
+  conditionalLogic?: ConditionalLogic[]
 }
 
 interface Section {
@@ -65,10 +75,66 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
     }
   }
 
+  // Conditional logic evaluation
+  const evaluateCondition = (condition: ConditionalLogic, answers: Record<string, any>): boolean => {
+    const sourceValue = answers[condition.sourceQuestionId]
+    const targetValue = condition.value
+
+    switch (condition.condition) {
+      case 'equals':
+        return sourceValue === targetValue
+      case 'not_equals':
+        return sourceValue !== targetValue
+      case 'contains':
+        return sourceValue && sourceValue.toString().toLowerCase().includes(targetValue.toString().toLowerCase())
+      case 'not_contains':
+        return !sourceValue || !sourceValue.toString().toLowerCase().includes(targetValue.toString().toLowerCase())
+      case 'greater_than':
+        return Number(sourceValue) > Number(targetValue)
+      case 'less_than':
+        return Number(sourceValue) < Number(targetValue)
+      case 'is_empty':
+        return !sourceValue || sourceValue === '' || (Array.isArray(sourceValue) && sourceValue.length === 0)
+      case 'is_not_empty':
+        return sourceValue && sourceValue !== '' && (!Array.isArray(sourceValue) || sourceValue.length > 0)
+      default:
+        return false
+    }
+  }
+
+  const shouldShowQuestion = (question: Question, answers: Record<string, any>): boolean => {
+    if (!question.conditionalLogic || question.conditionalLogic.length === 0) {
+      return true // Show by default if no conditional logic
+    }
+
+    // Evaluate all conditional logic rules
+    for (const logic of question.conditionalLogic) {
+      const conditionMet = evaluateCondition(logic, answers)
+      
+      if (conditionMet) {
+        switch (logic.action) {
+          case 'show':
+            return true
+          case 'hide':
+            return false
+          case 'skip':
+            return false
+        }
+      }
+    }
+
+    return true // Show by default if no conditions are met
+  }
+
   const validateCurrentSection = () => {
     const newErrors: Record<string, string> = {}
 
     currentSection.questions.forEach((question) => {
+      // Only validate visible questions
+      if (!shouldShowQuestion(question, answers)) {
+        return
+      }
+
       if (question.required && (!answers[question.id] || answers[question.id] === "")) {
         newErrors[question.id] = "This field is required"
       }
@@ -132,12 +198,22 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
             <Label className="text-base font-medium">
               {question.title}
               {question.required && <span className="text-red-500 ml-1">*</span>}
+              {question.conditionalLogic && question.conditionalLogic.length > 0 && (
+                <span className="ml-2 text-xs text-blue-500" title="Has conditional logic">⚡</span>
+              )}
             </Label>
             {question.description && <p className="text-sm text-gray-600 mt-1">{question.description}</p>}
           </div>
-          <Badge variant="outline" className="text-xs">
-            {question.scoring} pt{question.scoring !== 1 ? "s" : ""}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-xs">
+              {question.scoring} pt{question.scoring !== 1 ? "s" : ""}
+            </Badge>
+            {question.conditionalLogic && question.conditionalLogic.length > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                Logic: {question.conditionalLogic.length}
+              </Badge>
+            )}
+          </div>
         </div>
 
         {/* Render different input types */}
@@ -404,7 +480,11 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
           )}
 
           {/* Questions */}
-          <div className="space-y-6 mb-8">{currentSection?.questions.map((question) => renderQuestion(question))}</div>
+          <div className="space-y-6 mb-8">
+            {currentSection?.questions
+              .filter((question) => shouldShowQuestion(question, answers))
+              .map((question) => renderQuestion(question))}
+          </div>
 
           {/* Navigation */}
           <div className="flex justify-between items-center">
