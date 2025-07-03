@@ -1,6 +1,6 @@
 // Template service for handling API calls
 
-const API_BASE_URL = 'http://localhost:5049/api/v1';
+const API_BASE_URL = 'http://localhost:8080/api/v1';
 
 // Types
 export interface Template {

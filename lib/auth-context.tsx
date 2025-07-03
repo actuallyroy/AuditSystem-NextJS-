@@ -108,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     phone: string
     password: string
     organisationId?: string
+    role: "manager"
   }) => {
     setIsLoading(true)
     setError(null)
