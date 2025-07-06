@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,13 +9,17 @@ import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Progress } from "@/components/ui/progress"
-import { Shield, Key, Smartphone, Eye, EyeOff, CheckCircle, AlertTriangle, Clock, Globe } from "lucide-react"
+import { Shield, Key, Smartphone, Eye, EyeOff, CheckCircle, AlertTriangle, Clock, Globe, Loader2, LogOut } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
+import { settingsService, ChangePasswordRequest, SecuritySettings } from "@/lib/settings-service"
+import { toast } from "@/hooks/use-toast"
 
 interface SecuritySettingsProps {
   userRole: "admin" | "manager" | "supervisor" | "auditor"
 }
 
 export function SecuritySettings({ userRole }: SecuritySettingsProps) {
+  const { user, handleTokenExpiration } = useAuth()
   const [showCurrentPassword, setShowCurrentPassword] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -24,8 +28,186 @@ export function SecuritySettings({ userRole }: SecuritySettingsProps) {
     newPassword: "",
     confirmPassword: "",
   })
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [isUpdatingSettings, setIsUpdatingSettings] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [passwordStrength, setPasswordStrength] = useState(0)
+  const [securitySettings, setSecuritySettings] = useState<SecuritySettings | null>(null)
+  const [activeSessions, setActiveSessions] = useState<any[]>([])
+  const [securityEvents, setSecurityEvents] = useState<any[]>([])
+
+  // Fetch security data
+  const fetchSecurityData = async () => {
+    if (!user?.token) {
+      setError("No authentication token found")
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      // Fetch security settings, active sessions, and security events in parallel
+      const [settings, sessions, events] = await Promise.all([
+        settingsService.getSecuritySettings(user.token, handleTokenExpiration),
+        settingsService.getActiveSessions(user.token, handleTokenExpiration),
+        settingsService.getSecurityEvents(user.token, handleTokenExpiration),
+      ])
+
+      setSecuritySettings(settings)
+      setActiveSessions(sessions)
+      setSecurityEvents(events)
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to fetch security data"
+      setError(errorMessage)
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Change password
+  const handleChangePassword = async () => {
+    if (!user?.token || !user?.userId) {
+      toast({
+        title: "Error",
+        description: "No authentication token found",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "New passwords do not match",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (passwordStrength < 75) {
+      toast({
+        title: "Error",
+        description: "Password is too weak. Please choose a stronger password.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setIsChangingPassword(true)
+
+      const passwordRequest: ChangePasswordRequest = {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+      }
+
+      await settingsService.changePassword(
+        user.userId,
+        passwordRequest,
+        user.token,
+        handleTokenExpiration
+      )
+
+      // Clear form
+      setPasswordData({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      })
+      setPasswordStrength(0)
+
+      toast({
+        title: "Success",
+        description: "Password changed successfully",
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to change password"
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsChangingPassword(false)
+    }
+  }
+
+  // Update security settings
+  const handleUpdateSecuritySettings = async (newSettings: Partial<SecuritySettings>) => {
+    if (!user?.token || !securitySettings) {
+      toast({
+        title: "Error",
+        description: "No authentication token found",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setIsUpdatingSettings(true)
+
+      const updatedSettings = { ...securitySettings, ...newSettings }
+      const response = await settingsService.updateSecuritySettings(
+        updatedSettings,
+        user.token,
+        handleTokenExpiration
+      )
+
+      setSecuritySettings(response)
+      toast({
+        title: "Success",
+        description: "Security settings updated successfully",
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to update security settings"
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsUpdatingSettings(false)
+    }
+  }
+
+  // Revoke session
+  const handleRevokeSession = async (sessionId: string) => {
+    if (!user?.token) {
+      toast({
+        title: "Error",
+        description: "No authentication token found",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      await settingsService.revokeSession(sessionId, user.token, handleTokenExpiration)
+      
+      // Remove session from list
+      setActiveSessions(prev => prev.filter(session => session.id !== sessionId))
+      
+      toast({
+        title: "Success",
+        description: "Session revoked successfully",
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to revoke session"
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    }
+  }
 
   const calculatePasswordStrength = (password: string) => {
     let strength = 0
@@ -56,50 +238,64 @@ export function SecuritySettings({ userRole }: SecuritySettingsProps) {
     return "Strong"
   }
 
-  const activeSessions = [
-    {
-      id: "1",
-      device: "Chrome on Windows",
-      location: "Delhi, India",
-      lastActive: "Active now",
-      current: true,
-    },
-    {
-      id: "2",
-      device: "Mobile App on Android",
-      location: "Delhi, India",
-      lastActive: "2 hours ago",
-      current: false,
-    },
-    {
-      id: "3",
-      device: "Safari on MacBook",
-      location: "Mumbai, India",
-      lastActive: "1 day ago",
-      current: false,
-    },
-  ]
+  // Initial data fetch
+  useEffect(() => {
+    fetchSecurityData()
+  }, [user?.token])
 
-  const securityEvents = [
-    {
-      id: "1",
-      event: "Password changed",
-      timestamp: "2025-01-10 14:30",
-      status: "success",
-    },
-    {
-      id: "2",
-      event: "Login from new device",
-      timestamp: "2025-01-08 09:15",
-      status: "warning",
-    },
-    {
-      id: "3",
-      event: "Two-factor authentication enabled",
-      timestamp: "2025-01-05 16:45",
-      status: "success",
-    },
-  ]
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Security Settings
+            </CardTitle>
+            <CardDescription>Loading security data...</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Security Settings
+            </CardTitle>
+            <CardDescription>Error loading security data</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center py-8">
+              <p className="text-red-600 mb-4">{error}</p>
+              <Button onClick={fetchSecurityData} disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  "Retry"
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -205,114 +401,147 @@ export function SecuritySettings({ userRole }: SecuritySettingsProps) {
               >
                 {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </Button>
-              {passwordData.confirmPassword &&
-                passwordData.newPassword === passwordData.confirmPassword &&
-                passwordData.confirmPassword.length > 0 && (
-                  <CheckCircle className="absolute right-10 top-1/2 transform -translate-y-1/2 text-green-500 h-4 w-4" />
-                )}
             </div>
           </div>
 
-          <Button className="w-full">Update Password</Button>
+          <Button 
+            onClick={handleChangePassword} 
+            disabled={isChangingPassword || !passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword}
+            className="w-full"
+          >
+            {isChangingPassword ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Changing Password...
+              </>
+            ) : (
+              <>
+                <Key className="mr-2 h-4 w-4" />
+                Change Password
+              </>
+            )}
+          </Button>
         </CardContent>
       </Card>
 
-      {/* Two-Factor Authentication */}
+      {/* Security Preferences */}
+      {/*
+      {securitySettings && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Security Preferences
+            </CardTitle>
+            <CardDescription>Configure your security preferences</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Two-Factor Authentication</Label>
+                <p className="text-sm text-gray-500">Add an extra layer of security to your account</p>
+              </div>
+              <Switch
+                checked={securitySettings.twoFactorEnabled}
+                onCheckedChange={(checked) => handleUpdateSecuritySettings({ twoFactorEnabled: checked })}
+                disabled={isUpdatingSettings}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Login Notifications</Label>
+                <p className="text-sm text-gray-500">Get notified when someone logs into your account</p>
+              </div>
+              <Switch
+                checked={securitySettings.loginNotifications}
+                onCheckedChange={(checked) => handleUpdateSecuritySettings({ loginNotifications: checked })}
+                disabled={isUpdatingSettings}
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label className="text-base">Device Management</Label>
+                <p className="text-sm text-gray-500">Manage and monitor your active devices</p>
+              </div>
+              <Switch
+                checked={securitySettings.deviceManagement}
+                onCheckedChange={(checked) => handleUpdateSecuritySettings({ deviceManagement: checked })}
+                disabled={isUpdatingSettings}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      */}
+
+      {/* Active Sessions */}
+      {/*
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Smartphone className="h-5 w-5" />
-            Two-Factor Authentication
-          </CardTitle>
-          <CardDescription>Add an extra layer of security to your account</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <div className="font-medium">Enable Two-Factor Authentication</div>
-              <div className="text-sm text-gray-500">
-                Secure your account with SMS or authenticator app verification
-              </div>
-            </div>
-            <Switch checked={twoFactorEnabled} onCheckedChange={setTwoFactorEnabled} />
-          </div>
-
-          {twoFactorEnabled && (
-            <Alert>
-              <CheckCircle className="h-4 w-4" />
-              <AlertDescription>
-                Two-factor authentication is enabled. You'll receive a verification code when signing in.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {!twoFactorEnabled && (
-            <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                Your account is not protected by two-factor authentication. Enable it for better security.
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Active Sessions */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Globe className="h-5 w-5" />
             Active Sessions
           </CardTitle>
-          <CardDescription>Manage your active sessions across different devices</CardDescription>
+          <CardDescription>Manage your active login sessions</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {activeSessions.map((session) => (
               <div key={session.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-gray-100 rounded-lg">
-                    {session.device.includes("Mobile") ? (
-                      <Smartphone className="h-4 w-4" />
-                    ) : (
-                      <Globe className="h-4 w-4" />
-                    )}
+                <div className="flex items-center gap-4">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <Smartphone className="h-4 w-4 text-blue-600" />
                   </div>
                   <div>
-                    <div className="font-medium flex items-center gap-2">
-                      {session.device}
-                      {session.current && <Badge variant="default">Current</Badge>}
-                    </div>
+                    <div className="font-medium">{session.device}</div>
                     <div className="text-sm text-gray-500">{session.location}</div>
-                    <div className="text-xs text-gray-400 flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {session.lastActive}
-                    </div>
+                    <div className="text-xs text-gray-400">{session.ipAddress}</div>
                   </div>
                 </div>
-                {!session.current && (
-                  <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 bg-transparent">
-                    End Session
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  {session.current && (
+                    <Badge variant="default" className="text-xs">
+                      Current
+                    </Badge>
+                  )}
+                  <span className="text-sm text-gray-500">{session.lastActive}</span>
+                  {!session.current && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRevokeSession(session.id)}
+                    >
+                      <LogOut className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
         </CardContent>
       </Card>
+      */}
 
       {/* Security Events */}
+      {/*
       <Card>
         <CardHeader>
-          <CardTitle>Recent Security Events</CardTitle>
-          <CardDescription>Monitor recent security-related activities on your account</CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5" />
+            Recent Security Events
+          </CardTitle>
+          <CardDescription>Track recent security-related activities</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {securityEvents.map((event) => (
               <div key={event.id} className="flex items-center gap-3 p-3 border rounded-lg">
-                <div className={`p-2 rounded-lg ${event.status === "success" ? "bg-green-100" : "bg-yellow-100"}`}>
-                  {event.status === "success" ? (
+                <div className={`p-2 rounded-lg ${
+                  event.status === 'success' ? 'bg-green-100' : 'bg-yellow-100'
+                }`}>
+                  {event.status === 'success' ? (
                     <CheckCircle className="h-4 w-4 text-green-600" />
                   ) : (
                     <AlertTriangle className="h-4 w-4 text-yellow-600" />
@@ -320,13 +549,15 @@ export function SecuritySettings({ userRole }: SecuritySettingsProps) {
                 </div>
                 <div className="flex-1">
                   <div className="font-medium">{event.event}</div>
-                  <div className="text-sm text-gray-500">{event.timestamp}</div>
+                  <div className="text-sm text-gray-500">{event.ipAddress}</div>
                 </div>
+                <div className="text-sm text-gray-500">{event.timestamp}</div>
               </div>
             ))}
           </div>
         </CardContent>
       </Card>
+      */}
     </div>
   )
 }

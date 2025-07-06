@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,33 +9,150 @@ import { Textarea } from "@/components/ui/textarea"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Camera, Save, User, Mail, Phone, Building, MapPin, Calendar } from "lucide-react"
+import { Camera, Save, User, Mail, Phone, Building, MapPin, Calendar, Loader2 } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
+import { settingsService, UserProfile, UpdateProfileRequest } from "@/lib/settings-service"
+import { toast } from "@/hooks/use-toast"
 
 interface ProfileSettingsProps {
   userRole: "admin" | "manager" | "supervisor" | "auditor"
 }
 
 export function ProfileSettings({ userRole }: ProfileSettingsProps) {
-  const [profileData, setProfileData] = useState({
-    firstName: "John",
-    lastName: "Doe",
-    email: "john.doe@company.com",
-    phone: "+91 98765 43210",
+  const { user, handleTokenExpiration } = useAuth()
+  const [profileData, setProfileData] = useState<UserProfile | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Form data for editing
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
     bio: "Experienced retail audit manager with 8+ years in the industry.",
     department: "Operations",
     location: "Delhi, India",
     timezone: "Asia/Kolkata",
     language: "English",
-    joinDate: "2022-03-15",
   })
 
-  const [isEditing, setIsEditing] = useState(false)
+  // Fetch profile data
+  const fetchProfileData = async () => {
+    if (!user?.token || !user?.userId) {
+      setError("No authentication token found")
+      setIsLoading(false)
+      return
+    }
 
-  const handleSave = () => {
-    console.log("Saving profile:", profileData)
-    setIsEditing(false)
-    // Here you would typically save to your backend
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      const response = await settingsService.getUserProfile(
+        user.userId,
+        user.token,
+        handleTokenExpiration
+      )
+
+      setProfileData(response)
+      
+      // Initialize form data with profile data
+      setFormData({
+        firstName: response.firstName || "",
+        lastName: response.lastName || "",
+        email: response.email || "",
+        phone: response.phone || "",
+        bio: "Experienced retail audit manager with 8+ years in the industry.",
+        department: "Operations",
+        location: "Delhi, India",
+        timezone: "Asia/Kolkata",
+        language: "English",
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to fetch profile data"
+      setError(errorMessage)
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
+
+  // Save profile changes
+  const handleSave = async () => {
+    if (!user?.token || !user?.userId) {
+      toast({
+        title: "Error",
+        description: "No authentication token found",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setIsSaving(true)
+
+      const updateData: UpdateProfileRequest = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+      }
+
+      const updatedProfile = await settingsService.updateUserProfile(
+        user.userId,
+        updateData,
+        user.token,
+        handleTokenExpiration
+      )
+
+      setProfileData(updatedProfile)
+      setIsEditing(false)
+      
+      toast({
+        title: "Success",
+        description: "Profile updated successfully",
+      })
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to update profile"
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // Cancel editing
+  const handleCancel = () => {
+    if (profileData) {
+      setFormData({
+        firstName: profileData.firstName || "",
+        lastName: profileData.lastName || "",
+        email: profileData.email || "",
+        phone: profileData.phone || "",
+        bio: "Experienced retail audit manager with 8+ years in the industry.",
+        department: "Operations",
+        location: "Delhi, India",
+        timezone: "Asia/Kolkata",
+        language: "English",
+      })
+    }
+    setIsEditing(false)
+  }
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchProfileData()
+  }, [user?.token, user?.userId])
 
   const stats = [
     { label: "Audits Completed", value: "156", icon: User },
@@ -43,6 +160,67 @@ export function ProfileSettings({ userRole }: ProfileSettingsProps) {
     { label: "Team Members", value: "8", icon: User },
     { label: "Years Experience", value: "8+", icon: Calendar },
   ]
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Profile Information</CardTitle>
+            <CardDescription>Loading profile data...</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Profile Information</CardTitle>
+            <CardDescription>Error loading profile data</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center py-8">
+              <p className="text-red-600 mb-4">{error}</p>
+              <Button onClick={fetchProfileData} disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  "Retry"
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!profileData) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Profile Information</CardTitle>
+            <CardDescription>No profile data available</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -58,8 +236,8 @@ export function ProfileSettings({ userRole }: ProfileSettingsProps) {
               <Avatar className="h-24 w-24">
                 <AvatarImage src="/placeholder.svg" />
                 <AvatarFallback className="text-lg">
-                  {profileData.firstName[0]}
-                  {profileData.lastName[0]}
+                  {profileData.firstName?.[0] || "U"}
+                  {profileData.lastName?.[0] || "S"}
                 </AvatarFallback>
               </Avatar>
               <Button
@@ -81,12 +259,35 @@ export function ProfileSettings({ userRole }: ProfileSettingsProps) {
                     <Badge variant="default" className="capitalize">
                       {userRole}
                     </Badge>
-                    <span className="text-sm text-gray-500">{profileData.department}</span>
+                    <span className="text-sm text-gray-500">{formData.department}</span>
                   </div>
                 </div>
-                <Button onClick={() => setIsEditing(!isEditing)} variant={isEditing ? "outline" : "default"}>
-                  {isEditing ? "Cancel" : "Edit Profile"}
-                </Button>
+                <div className="flex gap-2">
+                  {isEditing ? (
+                    <>
+                      <Button onClick={handleCancel} variant="outline" disabled={isSaving}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleSave} disabled={isSaving}>
+                        {isSaving ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="mr-2 h-4 w-4" />
+                            Save Changes
+                          </>
+                        )}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button onClick={() => setIsEditing(true)}>
+                      Edit Profile
+                    </Button>
+                  )}
+                </div>
               </div>
 
               <div className="grid gap-2 text-sm">
@@ -96,40 +297,17 @@ export function ProfileSettings({ userRole }: ProfileSettingsProps) {
                 </div>
                 <div className="flex items-center gap-2">
                   <Phone className="h-4 w-4 text-gray-500" />
-                  {profileData.phone}
-                </div>
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-gray-500" />
-                  {profileData.location}
+                  {profileData.phone || "Phone not provided"}
                 </div>
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-gray-500" />
-                  Joined {profileData.joinDate}
+                  Joined {new Date(profileData.createdAt).toLocaleDateString()}
                 </div>
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
-
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
-        {stats.map((stat, index) => (
-          <Card key={index}>
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <stat.icon className="h-4 w-4 text-blue-600" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold">{stat.value}</div>
-                  <div className="text-sm text-gray-600">{stat.label}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
 
       {/* Edit Form */}
       {isEditing && (
@@ -144,16 +322,16 @@ export function ProfileSettings({ userRole }: ProfileSettingsProps) {
                 <Label htmlFor="firstName">First Name</Label>
                 <Input
                   id="firstName"
-                  value={profileData.firstName}
-                  onChange={(e) => setProfileData({ ...profileData, firstName: e.target.value })}
+                  value={formData.firstName}
+                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="lastName">Last Name</Label>
                 <Input
                   id="lastName"
-                  value={profileData.lastName}
-                  onChange={(e) => setProfileData({ ...profileData, lastName: e.target.value })}
+                  value={formData.lastName}
+                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                 />
               </div>
             </div>
@@ -164,83 +342,18 @@ export function ProfileSettings({ userRole }: ProfileSettingsProps) {
                 <Input
                   id="email"
                   type="email"
-                  value={profileData.email}
-                  onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">Phone</Label>
                 <Input
                   id="phone"
-                  value={profileData.phone}
-                  onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="bio">Bio</Label>
-              <Textarea
-                id="bio"
-                value={profileData.bio}
-                onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
-                rows={3}
-              />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="department">Department</Label>
-                <Select
-                  value={profileData.department}
-                  onValueChange={(value) => setProfileData({ ...profileData, department: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Operations">Operations</SelectItem>
-                    <SelectItem value="Quality Assurance">Quality Assurance</SelectItem>
-                    <SelectItem value="Management">Management</SelectItem>
-                    <SelectItem value="IT">IT</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="location">Location</Label>
-                <Input
-                  id="location"
-                  value={profileData.location}
-                  onChange={(e) => setProfileData({ ...profileData, location: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="timezone">Timezone</Label>
-                <Select
-                  value={profileData.timezone}
-                  onValueChange={(value) => setProfileData({ ...profileData, timezone: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Asia/Kolkata">Asia/Kolkata (IST)</SelectItem>
-                    <SelectItem value="America/New_York">America/New_York (EST)</SelectItem>
-                    <SelectItem value="Europe/London">Europe/London (GMT)</SelectItem>
-                    <SelectItem value="Asia/Tokyo">Asia/Tokyo (JST)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsEditing(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleSave}>
-                <Save className="h-4 w-4 mr-2" />
-                Save Changes
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -248,3 +361,4 @@ export function ProfileSettings({ userRole }: ProfileSettingsProps) {
     </div>
   )
 }
+

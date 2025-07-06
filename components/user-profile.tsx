@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronDown, User, Settings, LogOut } from "lucide-react"
+import { ChevronDown, User, Settings, LogOut, Building, Shield } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,9 +15,11 @@ import { useAuth } from "@/lib/auth-context"
 
 interface UserProfileProps {
   onLogout?: () => void
+  setActiveView?: (view: string) => void
+  setSettingsTab?: (tab: string) => void
 }
 
-export function UserProfile({ onLogout }: UserProfileProps) {
+export function UserProfile({ onLogout, setActiveView, setSettingsTab }: UserProfileProps) {
   const { user } = useAuth()
   
   // Get user initials for avatar fallback
@@ -50,13 +52,17 @@ export function UserProfile({ onLogout }: UserProfileProps) {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel>My Account</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
+        <DropdownMenuItem onClick={() => { setActiveView && setActiveView('settings'); setSettingsTab && setSettingsTab('profile'); }}>
           <User className="mr-2 h-4 w-4" />
           Profile
         </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Settings className="mr-2 h-4 w-4" />
-          Settings
+        <DropdownMenuItem onClick={() => { setActiveView && setActiveView('settings'); setSettingsTab && setSettingsTab('organization'); }}>
+          <Building className="mr-2 h-4 w-4" />
+          Organisation
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => { setActiveView && setActiveView('settings'); setSettingsTab && setSettingsTab('security'); }}>
+          <Shield className="mr-2 h-4 w-4" />
+          Security
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={onLogout}>

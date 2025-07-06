@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SettingsIcon, User, Building, Shield, Bell, Palette, Globe } from "lucide-react"
 import { ProfileSettings } from "@/components/settings/profile-settings"
@@ -12,10 +12,20 @@ import { RegionalSettings } from "@/components/settings/regional-settings"
 
 interface SettingsProps {
   userRole: "admin" | "manager" | "supervisor" | "auditor"
+  initialTab?: string
+  setTab?: (tab: string) => void
 }
 
-export function Settings({ userRole }: SettingsProps) {
-  const [activeTab, setActiveTab] = useState("profile")
+export function Settings({ userRole, initialTab = "profile", setTab }: SettingsProps) {
+  const [activeTab, setActiveTabState] = useState(initialTab)
+  const setActiveTab = (tab: string) => {
+    setActiveTabState(tab)
+    setTab && setTab(tab)
+  }
+
+  useEffect(() => {
+    setActiveTabState(initialTab)
+  }, [initialTab])
 
   const settingsTabs = [
     {
@@ -39,27 +49,27 @@ export function Settings({ userRole }: SettingsProps) {
       description: "Password and security settings",
       roles: ["admin", "manager", "supervisor", "auditor"],
     },
-    {
-      id: "notifications",
-      label: "Notifications",
-      icon: Bell,
-      description: "Configure notification preferences",
-      roles: ["admin", "manager", "supervisor", "auditor"],
-    },
-    {
-      id: "appearance",
-      label: "Appearance",
-      icon: Palette,
-      description: "Customize the interface",
-      roles: ["admin", "manager", "supervisor", "auditor"],
-    },
-    {
-      id: "regional",
-      label: "Regional",
-      icon: Globe,
-      description: "Language and regional settings",
-      roles: ["admin", "manager", "supervisor", "auditor"],
-    },
+    // {
+    //   id: "notifications",
+    //   label: "Notifications",
+    //   icon: Bell,
+    //   description: "Configure notification preferences",
+    //   roles: ["admin", "manager", "supervisor", "auditor"],
+    // },
+    // {
+    //   id: "appearance",
+    //   label: "Appearance",
+    //   icon: Palette,
+    //   description: "Customize the interface",
+    //   roles: ["admin", "manager", "supervisor", "auditor"],
+    // },
+    // {
+    //   id: "regional",
+    //   label: "Regional",
+    //   icon: Globe,
+    //   description: "Language and regional settings",
+    //   roles: ["admin", "manager", "supervisor", "auditor"],
+    // },
   ]
 
   const filteredTabs = settingsTabs.filter((tab) => tab.roles.includes(userRole))

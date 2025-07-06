@@ -20,6 +20,7 @@ import { Settings } from "@/components/settings"
 export default function Home() {
   const { isAuthenticated, isLoading, user, logout } = useAuth()
   const [activeView, setActiveView] = useState("dashboard")
+  const [settingsTab, setSettingsTab] = useState("profile")
   const [authView, setAuthView] = useState<"login" | "signup" | "reset" | "recovery">("login")
 
   // Get user role from auth context
@@ -59,7 +60,7 @@ export default function Home() {
       case "logs":
         return userRole === "admin" ? <Logs /> : <Dashboard userRole={userRole} />
       case "settings":
-        return <Settings userRole={userRole} />
+        return <Settings userRole={userRole} initialTab={settingsTab} setTab={setSettingsTab} />
       case "template-builder":
         return <TemplateBuilder />
       default:
@@ -77,7 +78,7 @@ export default function Home() {
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-semibold text-gray-900">Retail Execution Audit System</h1>
             </div>
-            <UserProfile onLogout={logout} />
+            <UserProfile onLogout={logout} setActiveView={setActiveView} setSettingsTab={setSettingsTab} />
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 bg-gray-50 min-h-screen">{renderContent()}</div>
