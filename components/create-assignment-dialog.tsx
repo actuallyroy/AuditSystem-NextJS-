@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/lib/auth-context"
 import { assignmentService, CreateAssignmentRequest } from "@/lib/assignment-service"
 import { templateService, Template } from "@/lib/template-service"
-import { Loader2, AlertCircle, Info } from "lucide-react"
+import { Loader2, AlertCircle, Info, RefreshCw, User, Plus } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 // User interface for auditors (from Users API)
@@ -40,10 +40,11 @@ interface CreateAssignmentDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onAssignmentCreated?: () => void
+  setActiveView?: (view: string) => void
 }
 
-export function CreateAssignmentDialog({ open, onOpenChange, onAssignmentCreated }: CreateAssignmentDialogProps) {
-  const { user, userDetails } = useAuth()
+export function CreateAssignmentDialog({ open, onOpenChange, onAssignmentCreated, setActiveView }: CreateAssignmentDialogProps) {
+  const { user, userDetails, handleTokenExpiration } = useAuth()
   const [formData, setFormData] = useState({
     templateId: "",
     assignedToId: "",
@@ -135,7 +136,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onAssignmentCreated
     
     try {
       addDebugInfo("Fetching templates from API...")
-      const templatesData = await templateService.getTemplates(user.token)
+      const templatesData = await templateService.getTemplates(user.token, handleTokenExpiration)
       
       if (!Array.isArray(templatesData)) {
         throw new Error("Invalid templates data format received from server")
@@ -368,6 +369,69 @@ export function CreateAssignmentDialog({ open, onOpenChange, onAssignmentCreated
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin mr-2" />
                 <span>Loading templates and auditors...</span>
+              </div>
+            ) : templates.length === 0 || auditors.length === 0 ? (
+              <div className="text-center py-8 space-y-4">
+                <AlertCircle className="h-12 w-12 text-orange-500 mx-auto mb-4" />
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Prerequisites Required</h3>
+                  <div className="text-gray-600 space-y-2">
+                    {templates.length === 0 && (
+                      <p>• No templates available - templates are required to create assignments</p>
+                    )}
+                    {auditors.length === 0 && (
+                      <p>• No active auditors found - auditors are required to assign work</p>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex flex-col gap-3 mt-6">
+                  {templates.length === 0 && setActiveView && (
+                    <Button 
+                      type="button"
+                      onClick={() => {
+                        onOpenChange(false)
+                        setActiveView('templates')
+                      }}
+                      className="w-full"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Templates First
+                    </Button>
+                  )}
+                  {auditors.length === 0 && setActiveView && (
+                    <Button 
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        onOpenChange(false)
+                        setActiveView('settings')
+                      }}
+                      className="w-full"
+                    >
+                      <User className="h-4 w-4 mr-2" />
+                      Manage Users & Auditors
+                    </Button>
+                  )}
+                  <Button 
+                    type="button"
+                    variant="outline"
+                    onClick={() => loadData()}
+                    className="w-full"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh Data
+                  </Button>
+                </div>
+                
+                <p className="text-sm text-gray-500 mt-4">
+                  {templates.length === 0 && auditors.length === 0 
+                    ? "You need both templates and auditors to create assignments."
+                    : templates.length === 0 
+                      ? "Create audit templates to define what needs to be inspected."
+                      : "Add auditors to your organization to assign work to them."
+                  }
+                </p>
               </div>
             ) : (
               <>

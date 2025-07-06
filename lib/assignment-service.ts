@@ -21,6 +21,24 @@ export interface Assignment {
   templateName?: string;
   assignedToName?: string;
   assignedByName?: string;
+  // Nested objects from API response
+  template?: {
+    templateId: string;
+    name: string;
+    category: string;
+  };
+  assignedTo?: {
+    userId: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+  assignedBy?: {
+    userId: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
 }
 
 export interface CreateAssignmentRequest {
@@ -91,9 +109,10 @@ class AssignmentService {
       method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
       body?: any;
       token: string;
+      onTokenExpired?: () => void;
     }
   ): Promise<T> {
-    const { method = 'GET', body, token } = options;
+    const { method = 'GET', body, token, onTokenExpired } = options;
     
     const config: RequestInit = {
       method,
@@ -110,6 +129,12 @@ class AssignmentService {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
 
     if (!response.ok) {
+      // Handle token expiration
+      if (response.status === 401 && onTokenExpired) {
+        onTokenExpired();
+        throw new Error('Session expired. Please login again.');
+      }
+      
       let errorMessage = `HTTP ${response.status}`;
       try {
         const errorData = await response.json();
@@ -165,14 +190,14 @@ class AssignmentService {
   /**
    * Get all assignments
    */
-  async getAssignments(token: string, organisationId?: string): Promise<Assignment[]> {
+  async getAssignments(token: string, organisationId?: string, onTokenExpired?: () => void): Promise<Assignment[]> {
     try {
       let endpoint = '/Assignments';
       if (organisationId) {
         endpoint = `/Assignments/organisation/${organisationId}`;
       }
       
-      const assignments = await this.makeRequest<Assignment[]>(endpoint, { token });
+      const assignments = await this.makeRequest<Assignment[]>(endpoint, { token, onTokenExpired });
       return assignments || [];
     } catch (error) {
       console.error('Error fetching assignments:', error);
@@ -202,15 +227,15 @@ class AssignmentService {
   /**
    * Get assignments assigned to current user
    */
-  async getMyAssignments(token: string): Promise<Assignment[]> {
+  async getMyAssignments(token: string, onTokenExpired?: () => void): Promise<Assignment[]> {
     try {
-      const assignments = await this.makeRequest<Assignment[]>('/Assignments/my', { token });
+      const assignments = await this.makeRequest<Assignment[]>('/Assignments/my', { token, onTokenExpired });
       return assignments || [];
     } catch (error) {
       console.error('Error fetching my assignments:', error);
       // Fallback to get all assignments and filter by user
       try {
-        const allAssignments = await this.getAssignments(token);
+        const allAssignments = await this.getAssignments(token, undefined, onTokenExpired);
         // Note: This requires the JWT token to contain user ID info
         return allAssignments; // Backend should handle filtering by user
       } catch {
@@ -369,10 +394,10 @@ class AssignmentService {
    * Get assignment statistics
    * Calculates stats from fetched assignments since there's no dedicated stats endpoint
    */
-  async getAssignmentStats(token: string, organisationId?: string): Promise<AssignmentStats> {
+  async getAssignmentStats(token: string, organisationId?: string, onTokenExpired?: () => void): Promise<AssignmentStats> {
     try {
       // Fetch all assignments for the organization and calculate stats client-side
-      const assignments = await this.getAssignments(token, organisationId);
+      const assignments = await this.getAssignments(token, organisationId, onTokenExpired);
       const now = new Date();
       
       const stats: AssignmentStats = {
@@ -437,8 +462,6 @@ class AssignmentService {
    */
   formatStoreInfo(storeInfo: StoreInfo): object {
     return {
-      storeName: storeInfo.storeName,
-      storeAddress: storeInfo.storeAddress,
       ...storeInfo
     };
   }

@@ -188,7 +188,7 @@ export function AppSidebar({ activeView, setActiveView, userRole }: AppSidebarPr
           <SidebarGroupLabel>System</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {filteredSystemItems.map((item) => (
+              {filteredSystemItems.map((item: any) => (
                 <SidebarMenuItem key={item.id}>
                   <SidebarMenuButton
                     onClick={() => setActiveView(item.id)}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { X, Plus, Trash2, GripVertical } from "lucide-react"
-import { ConditionalLogicPanel } from "@/components/conditional-logic-panel"
 
 interface Question {
   id: string
@@ -22,7 +21,6 @@ interface Question {
   options?: string[]
   validation?: any
   scoring?: number
-  conditionalLogic?: any[]
 }
 
 interface Section {
@@ -42,6 +40,11 @@ interface QuestionConfigPanelProps {
 
 export function QuestionConfigPanel({ question, allQuestions, sections, onUpdate, onClose }: QuestionConfigPanelProps) {
   const [localQuestion, setLocalQuestion] = useState(question)
+
+  // Reset local state when question prop changes
+  useEffect(() => {
+    setLocalQuestion(question)
+  }, [question])
 
   const updateLocalQuestion = (updates: Partial<Question>) => {
     const updated = { ...localQuestion, ...updates }
@@ -65,8 +68,8 @@ export function QuestionConfigPanel({ question, allQuestions, sections, onUpdate
     updateLocalQuestion({ options: newOptions })
   }
 
-  const hasOptions = ["dropdown", "radio", "checkbox"].includes(question.type)
-  const hasValidation = ["text", "textarea", "number", "email", "phone"].includes(question.type)
+  const hasOptions = ["dropdown", "single_choice", "multiple_choice"].includes(question.type)
+  const hasValidation = ["text", "numeric"].includes(question.type)
 
   return (
     <div className="w-80 bg-white border-l flex flex-col">
@@ -133,7 +136,7 @@ export function QuestionConfigPanel({ question, allQuestions, sections, onUpdate
             </div>
           </div>
 
-          {/* Options for dropdown, radio, checkbox */}
+          {/* Options for dropdown, single_choice, multiple_choice */}
           {hasOptions && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -218,7 +221,7 @@ export function QuestionConfigPanel({ question, allQuestions, sections, onUpdate
                 </div>
               )}
 
-              {question.type === "number" && (
+              {question.type === "numeric" && (
                 <div className="space-y-3">
                   <div>
                     <Label htmlFor="min-value">Minimum Value</Label>
@@ -257,41 +260,14 @@ export function QuestionConfigPanel({ question, allQuestions, sections, onUpdate
             </div>
           )}
 
-          {/* Special Settings for Rating */}
-          {question.type === "rating" && (
+          {/* Special Settings for File Upload */}
+          {question.type === "file_upload" && (
             <div className="space-y-4">
-              <Label>Rating Settings</Label>
-              <div>
-                <Label htmlFor="rating-scale">Rating Scale</Label>
-                <Select
-                  value={localQuestion.validation?.scale?.toString() || "5"}
-                  onValueChange={(value) =>
-                    updateLocalQuestion({
-                      validation: { ...localQuestion.validation, scale: Number.parseInt(value) },
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="3">1-3 Scale</SelectItem>
-                    <SelectItem value="5">1-5 Scale</SelectItem>
-                    <SelectItem value="10">1-10 Scale</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-
-          {/* Image Upload Settings */}
-          {question.type === "image" && (
-            <div className="space-y-4">
-              <Label>Image Settings</Label>
+              <Label>File Upload Settings</Label>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label>Multiple Images</Label>
-                  <p className="text-sm text-gray-500">Allow multiple image uploads</p>
+                  <Label>Multiple Files</Label>
+                  <p className="text-sm text-gray-500">Allow multiple file uploads</p>
                 </div>
                 <Switch
                   checked={localQuestion.validation?.multiple || false}
@@ -303,51 +279,22 @@ export function QuestionConfigPanel({ question, allQuestions, sections, onUpdate
                 />
               </div>
               <div>
-                <Label htmlFor="max-images">Maximum Images</Label>
+                <Label htmlFor="max-files">Maximum Files</Label>
                 <Input
-                  id="max-images"
+                  id="max-files"
                   type="number"
                   min="1"
                   max="10"
-                  value={localQuestion.validation?.maxImages || 1}
+                  value={localQuestion.validation?.maxFiles || 1}
                   onChange={(e) =>
                     updateLocalQuestion({
-                      validation: { ...localQuestion.validation, maxImages: Number.parseInt(e.target.value) || 1 },
+                      validation: { ...localQuestion.validation, maxFiles: Number.parseInt(e.target.value) || 1 },
                     })
                   }
                 />
               </div>
             </div>
           )}
-
-          {/* Conditional Logic */}
-          <ConditionalLogicPanel
-            question={localQuestion}
-            allQuestions={allQuestions}
-            sections={sections}
-            onUpdate={updateLocalQuestion}
-          />
-
-          {/* Preview */}
-          <div className="space-y-2">
-            <Label>Preview</Label>
-            <Card className="p-3">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm">{localQuestion.title}</span>
-                  {localQuestion.required && (
-                    <Badge variant="destructive" className="text-xs">
-                      Required
-                    </Badge>
-                  )}
-                </div>
-                {localQuestion.description && <p className="text-xs text-gray-600">{localQuestion.description}</p>}
-                <div className="text-xs text-gray-500 capitalize">
-                  {question.type} • {localQuestion.scoring} point{localQuestion.scoring !== 1 ? "s" : ""}
-                </div>
-              </div>
-            </Card>
-          </div>
         </div>
       </ScrollArea>
     </div>

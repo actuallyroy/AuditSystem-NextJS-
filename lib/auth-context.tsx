@@ -18,8 +18,10 @@ interface AuthContextType {
     phone: string
     password: string
     organisationId?: string
+    role?: string
   }) => Promise<void>
   logout: () => void
+  handleTokenExpiration: () => void
   error: string | null
   clearError: () => void
 }
@@ -108,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     phone: string
     password: string
     organisationId?: string
-    role: "manager"
+    role?: string
   }) => {
     setIsLoading(true)
     setError(null)
@@ -137,6 +139,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthenticated(false)
   }
 
+  // Handle token expiration
+  const handleTokenExpiration = () => {
+    setError("Your session has expired. Please login again.")
+    logout()
+  }
+
   return (
     <AuthContext.Provider
       value={{
@@ -147,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
+        handleTokenExpiration,
         error,
         clearError,
       }}

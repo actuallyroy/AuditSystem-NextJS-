@@ -51,14 +51,14 @@ import {
   AlertTriangle,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
-import { organizationService, type Organization, type OrganizationMember } from "@/lib/organization-service"
+import { organizationService, type Organization, type OrganizationMember, type OrganizationWithData, type OrganizationAssignment } from "@/lib/organization-service"
 
 interface OrganizationSettingsProps {
   userRole: "admin" | "manager" | "supervisor" | "auditor"
 }
 
 export function OrganizationSettings({ userRole }: OrganizationSettingsProps) {
-  const { user, userDetails } = useAuth()
+  const { user, userDetails, handleTokenExpiration } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedTab, setSelectedTab] = useState("details")
   const [isLoading, setIsLoading] = useState(true)
@@ -90,7 +90,7 @@ export function OrganizationSettings({ userRole }: OrganizationSettingsProps) {
   
   // Members data
   const [members, setMembers] = useState<OrganizationMember[]>([])
-  const [assignments, setAssignments] = useState<any[]>([])
+  const [assignments, setAssignments] = useState<OrganizationAssignment[]>([])
   const [audits, setAudits] = useState<any[]>([])
   
   // Dialog states
@@ -113,63 +113,75 @@ export function OrganizationSettings({ userRole }: OrganizationSettingsProps) {
     try {
       console.log("Loading organization data for:", userDetails.organisationId)
       
-      // Load organization details
-      try {
-        const orgData = await organizationService.getOrganization(userDetails.organisationId, user.token)
-        console.log("Organization data loaded:", orgData)
-        setOrganization(orgData)
-        setOrgFormData({
-          name: orgData.name,
-          region: orgData.region || "",
-          type: orgData.type || "",
-        })
-      } catch (orgError) {
-        console.error("Failed to load organization details:", orgError)
-        // Create a fallback organization object
-        const fallbackOrg = {
-          organisationId: userDetails.organisationId,
-          name: "Your Organization",
-          region: "",
-          type: "retail_chain", // Default to retail chain
-          createdAt: new Date().toISOString()
-        }
-        setOrganization(fallbackOrg)
-        setOrgFormData({
-          name: fallbackOrg.name,
-          region: fallbackOrg.region,
-          type: fallbackOrg.type,
-        })
-      }
-
-      // Load members
-      try {
-        const membersData = await organizationService.getOrganizationMembers(userDetails.organisationId, user.token)
-        console.log("Members data loaded:", membersData)
-        setMembers(membersData)
-      } catch (membersError) {
-        console.error("Failed to load organization members:", membersError)
-        setMembers([]) // Fallback to empty array
-      }
-
-      // Load assignments and audits if user has permission
-      if (userRole === "admin" || userRole === "manager") {
-        try {
-          const [assignmentsData, auditsData] = await Promise.all([
-            organizationService.getOrganizationAssignments(userDetails.organisationId, user.token),
-            organizationService.getOrganizationAudits(userDetails.organisationId, user.token)
-          ])
-          setAssignments(assignmentsData)
-          setAudits(auditsData)
-        } catch (err) {
-          // These endpoints might not exist yet, so we'll use empty arrays
-          console.warn("Could not load assignments/audits:", err)
-          setAssignments([])
-          setAudits([])
-        }
-      }
+      // Use the single API call to get all organization data
+      const orgData = await organizationService.getOrganizationWithData(
+        userDetails.organisationId,
+        user.token,
+        handleTokenExpiration
+      )
+      
+      console.log("Complete organization data loaded:", orgData)
+      
+      // Set organization details
+      setOrganization({
+        organisationId: orgData.organisationId,
+        name: orgData.name,
+        region: orgData.region,
+        type: orgData.type,
+        createdAt: orgData.createdAt
+      })
+      
+      setOrgFormData({
+        name: orgData.name,
+        region: orgData.region || "",
+        type: orgData.type || "",
+      })
+      
+      // Set members from users array
+      const members = (orgData.users || []).map(user => ({
+        userId: user.userId,
+        username: user.username,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+        updatedAt: user.createdAt
+      }))
+      
+      console.log("Members extracted:", members)
+      setMembers(members)
+      
+      // Set assignments from top-level assignments array
+      const assignments = orgData.assignments || []
+      console.log("Assignments extracted:", assignments)
+      setAssignments(assignments)
+      
+      // Clear any previous errors
+      setError(null)
+      
     } catch (err) {
       console.error("Error loading organization data:", err)
       setError(err instanceof Error ? err.message : "Failed to load organization data")
+      
+      // Set fallback data if API fails
+      const fallbackOrg = {
+        organisationId: userDetails.organisationId,
+        name: "Your Organization",
+        region: "",
+        type: "retail_chain",
+        createdAt: new Date().toISOString()
+      }
+      setOrganization(fallbackOrg)
+      setOrgFormData({
+        name: fallbackOrg.name,
+        region: fallbackOrg.region,
+        type: fallbackOrg.type,
+      })
+      setMembers([])
+      setAssignments([])
     } finally {
       setIsLoading(false)
     }
@@ -323,7 +335,7 @@ export function OrganizationSettings({ userRole }: OrganizationSettingsProps) {
       )}
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
@@ -363,27 +375,13 @@ export function OrganizationSettings({ userRole }: OrganizationSettingsProps) {
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <Clock className="h-4 w-4 text-orange-600" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold">{audits.length}</div>
-                <div className="text-sm text-gray-600">Audits</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="details">Organization</TabsTrigger>
           <TabsTrigger value="members">Members</TabsTrigger>
           <TabsTrigger value="assignments">Assignments</TabsTrigger>
-          <TabsTrigger value="audits">Audits</TabsTrigger>
         </TabsList>
 
         {/* Organization Details Tab */}
@@ -656,17 +654,41 @@ export function OrganizationSettings({ userRole }: OrganizationSettingsProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {assignments.map((assignment) => (
-                      <TableRow key={assignment.id}>
-                        <TableCell className="font-medium">{assignment.id}</TableCell>
-                        <TableCell>{assignment.auditor}</TableCell>
-                        <TableCell>{assignment.template}</TableCell>
-                        <TableCell>
-                          <Badge variant={getStatusColor(assignment.status)}>{assignment.status}</Badge>
-                        </TableCell>
-                        <TableCell>{assignment.dueDate}</TableCell>
-                      </TableRow>
-                    ))}
+                    {assignments.map((assignment) => {
+                      // Extract template name from nested template object
+                      const templateName = assignment.template?.name || 'Unknown Template'
+                      
+                      // Handle assignedTo and assignedBy - they are user objects, not strings
+                      let assignedToName = 'Unknown Auditor'
+                      if (assignment.assignedTo) {
+                        if (typeof assignment.assignedTo === 'string') {
+                          assignedToName = assignment.assignedTo
+                        } else if (typeof assignment.assignedTo === 'object' && assignment.assignedTo.firstName && assignment.assignedTo.lastName) {
+                          assignedToName = `${assignment.assignedTo.firstName} ${assignment.assignedTo.lastName}`.trim()
+                        }
+                      }
+                      
+                      let assignedByName = 'Unknown Manager'
+                      if (assignment.assignedBy) {
+                        if (typeof assignment.assignedBy === 'string') {
+                          assignedByName = assignment.assignedBy
+                        } else if (typeof assignment.assignedBy === 'object' && assignment.assignedBy.firstName && assignment.assignedBy.lastName) {
+                          assignedByName = `${assignment.assignedBy.firstName} ${assignment.assignedBy.lastName}`.trim()
+                        }
+                      }
+                      
+                      return (
+                        <TableRow key={assignment.assignmentId}>
+                          <TableCell className="font-medium">{assignment.assignmentId}</TableCell>
+                          <TableCell>{assignedToName}</TableCell>
+                          <TableCell>{templateName}</TableCell>
+                          <TableCell>
+                            <Badge variant={getStatusColor(assignment.status)}>{assignment.status}</Badge>
+                          </TableCell>
+                          <TableCell>{formatDate(assignment.dueDate)}</TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               )}
@@ -674,63 +696,7 @@ export function OrganizationSettings({ userRole }: OrganizationSettingsProps) {
           </Card>
         </TabsContent>
 
-        {/* Audits Tab */}
-        <TabsContent value="audits" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Organization Audits</CardTitle>
-              <CardDescription>View completed and flagged audits</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {audits.length === 0 ? (
-                <div className="text-center py-8">
-                  <CheckCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No Audits</h3>
-                  <p className="text-gray-600">No audits found for this organization.</p>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Audit ID</TableHead>
-                      <TableHead>Auditor</TableHead>
-                      <TableHead>Template</TableHead>
-                      <TableHead>Score</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Submitted</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {audits.map((audit) => (
-                      <TableRow key={audit.id}>
-                        <TableCell className="font-medium">{audit.id}</TableCell>
-                        <TableCell>{audit.auditor}</TableCell>
-                        <TableCell>{audit.template}</TableCell>
-                        <TableCell>
-                          <span
-                            className={`font-medium ${
-                              audit.score >= 90
-                                ? "text-green-600"
-                                : audit.score >= 75
-                                  ? "text-yellow-600"
-                                  : "text-red-600"
-                            }`}
-                          >
-                            {audit.score}%
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={getStatusColor(audit.status)}>{audit.status}</Badge>
-                        </TableCell>
-                        <TableCell>{audit.submittedDate}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
+
       </Tabs>
 
       {/* Remove Member Dialog */}

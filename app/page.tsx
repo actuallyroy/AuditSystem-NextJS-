@@ -47,9 +47,9 @@ export default function Home() {
       case "dashboard":
         return <Dashboard userRole={userRole} />
       case "templates":
-        return <Templates />
+        return <Templates setActiveView={setActiveView} />
       case "assignments":
-        return <Assignments userRole={userRole} />
+        return <Assignments userRole={userRole} setActiveView={setActiveView} />
       case "audits":
         return <Audits />
       case "reports":

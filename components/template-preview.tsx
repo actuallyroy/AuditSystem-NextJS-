@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,15 +12,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
-import { ArrowLeft, ArrowRight, Save, Star, Camera, MapPin, Upload, CheckCircle, AlertCircle } from "lucide-react"
+import { ArrowLeft, ArrowRight, Save, Camera, MapPin, Upload, CheckCircle, AlertCircle, FileText, Edit3, BarChart3 } from "lucide-react"
 
 interface ConditionalLogic {
   id: string
   sourceQuestionId: string
   condition: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty'
   value: string | number | boolean
-  action: 'show' | 'hide' | 'skip'
-  targetQuestionIds: string[]
+  action: 'show' | 'hide'
+  targetSectionId: string
 }
 
 interface Question {
@@ -32,7 +32,6 @@ interface Question {
   options?: string[]
   validation?: any
   scoring?: number
-  conditionalLogic?: ConditionalLogic[]
 }
 
 interface Section {
@@ -40,6 +39,8 @@ interface Section {
   title: string
   description?: string
   questions: Question[]
+  conditionalLogic?: ConditionalLogic[]
+  isVisible?: boolean
 }
 
 interface Template {
@@ -58,9 +59,46 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
   const [currentSectionIndex, setCurrentSectionIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<string, any>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [visibleSections, setVisibleSections] = useState<string[]>([])
 
-  const currentSection = template.sections[currentSectionIndex]
-  const totalSections = template.sections.length
+  // Calculate which sections should be visible based on conditional logic
+  useEffect(() => {
+    const calculateVisibleSections = () => {
+      const visible: string[] = []
+      
+      template.sections.forEach(section => {
+        let shouldShow = true
+        
+        if (section.conditionalLogic && section.conditionalLogic.length > 0) {
+          // Check all conditional logic rules for this section
+          for (const logic of section.conditionalLogic) {
+            const conditionMet = evaluateCondition(logic, answers)
+            
+            if (conditionMet) {
+              shouldShow = logic.action === 'show'
+              break // First matching condition wins
+            }
+          }
+        }
+        
+        if (shouldShow) {
+          visible.push(section.id)
+        }
+      })
+      
+      setVisibleSections(visible)
+    }
+    
+    calculateVisibleSections()
+  }, [answers, template.sections])
+
+  // Get current visible sections
+  const visibleSectionsList = template.sections.filter(section => 
+    visibleSections.includes(section.id)
+  )
+  
+  const currentSection = visibleSectionsList[currentSectionIndex]
+  const totalSections = visibleSectionsList.length
   const progress = totalSections > 0 ? ((currentSectionIndex + 1) / totalSections) * 100 : 0
 
   const updateAnswer = (questionId: string, value: any) => {
@@ -75,7 +113,7 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
     }
   }
 
-  // Conditional logic evaluation
+  // Section-level conditional logic evaluation
   const evaluateCondition = (condition: ConditionalLogic, answers: Record<string, any>): boolean => {
     const sourceValue = answers[condition.sourceQuestionId]
     const targetValue = condition.value
@@ -102,39 +140,12 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
     }
   }
 
-  const shouldShowQuestion = (question: Question, answers: Record<string, any>): boolean => {
-    if (!question.conditionalLogic || question.conditionalLogic.length === 0) {
-      return true // Show by default if no conditional logic
-    }
-
-    // Evaluate all conditional logic rules
-    for (const logic of question.conditionalLogic) {
-      const conditionMet = evaluateCondition(logic, answers)
-      
-      if (conditionMet) {
-        switch (logic.action) {
-          case 'show':
-            return true
-          case 'hide':
-            return false
-          case 'skip':
-            return false
-        }
-      }
-    }
-
-    return true // Show by default if no conditions are met
-  }
-
   const validateCurrentSection = () => {
     const newErrors: Record<string, string> = {}
 
-    currentSection.questions.forEach((question) => {
-      // Only validate visible questions
-      if (!shouldShowQuestion(question, answers)) {
-        return
-      }
+    if (!currentSection) return true
 
+    currentSection.questions.forEach((question) => {
       if (question.required && (!answers[question.id] || answers[question.id] === "")) {
         newErrors[question.id] = "This field is required"
       }
@@ -143,7 +154,7 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
       if (answers[question.id] && question.validation) {
         const value = answers[question.id]
 
-        if (question.type === "text" || question.type === "textarea") {
+        if (question.type === "text") {
           if (question.validation.minLength && value.length < question.validation.minLength) {
             newErrors[question.id] = `Minimum ${question.validation.minLength} characters required`
           }
@@ -152,7 +163,7 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
           }
         }
 
-        if (question.type === "number") {
+        if (question.type === "numeric") {
           const numValue = Number.parseFloat(value)
           if (question.validation.min !== undefined && numValue < question.validation.min) {
             newErrors[question.id] = `Minimum value is ${question.validation.min}`
@@ -198,9 +209,6 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
             <Label className="text-base font-medium">
               {question.title}
               {question.required && <span className="text-red-500 ml-1">*</span>}
-              {question.conditionalLogic && question.conditionalLogic.length > 0 && (
-                <span className="ml-2 text-xs text-blue-500" title="Has conditional logic">⚡</span>
-              )}
             </Label>
             {question.description && <p className="text-sm text-gray-600 mt-1">{question.description}</p>}
           </div>
@@ -208,15 +216,10 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
             <Badge variant="outline" className="text-xs">
               {question.scoring} pt{question.scoring !== 1 ? "s" : ""}
             </Badge>
-            {question.conditionalLogic && question.conditionalLogic.length > 0 && (
-              <Badge variant="secondary" className="text-xs">
-                Logic: {question.conditionalLogic.length}
-              </Badge>
-            )}
           </div>
         </div>
 
-        {/* Render different input types */}
+        {/* Render different input types based on spec */}
         {question.type === "text" && (
           <Input
             value={value}
@@ -226,32 +229,19 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
           />
         )}
 
-        {question.type === "textarea" && (
-          <Textarea
+        {question.type === "numeric" && (
+          <Input
+            type="number"
             value={value}
             onChange={(e) => updateAnswer(question.id, e.target.value)}
-            placeholder="Enter your detailed answer..."
-            rows={4}
+            placeholder="Enter a number..."
+            min={question.validation?.min}
+            max={question.validation?.max}
             className={hasError ? "border-red-500" : ""}
           />
         )}
 
-        {question.type === "dropdown" && (
-          <Select value={value} onValueChange={(val) => updateAnswer(question.id, val)}>
-            <SelectTrigger className={hasError ? "border-red-500" : ""}>
-              <SelectValue placeholder="Select an option..." />
-            </SelectTrigger>
-            <SelectContent>
-              {question.options?.map((option, index) => (
-                <SelectItem key={index} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
-        {question.type === "radio" && (
+        {question.type === "single_choice" && (
           <RadioGroup value={value} onValueChange={(val) => updateAnswer(question.id, val)}>
             {question.options?.map((option, index) => (
               <div key={index} className="flex items-center space-x-2">
@@ -262,7 +252,7 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
           </RadioGroup>
         )}
 
-        {question.type === "checkbox" && (
+        {question.type === "multiple_choice" && (
           <div className="space-y-2">
             {question.options?.map((option, index) => (
               <div key={index} className="flex items-center space-x-2">
@@ -287,38 +277,22 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
           </div>
         )}
 
-        {question.type === "rating" && (
-          <div className="flex items-center gap-1">
-            {Array.from({ length: question.validation?.scale || 5 }, (_, i) => i + 1).map((rating) => (
-              <Button
-                key={rating}
-                variant="ghost"
-                size="sm"
-                onClick={() => updateAnswer(question.id, rating)}
-                className={`p-1 ${value === rating ? "text-yellow-500" : "text-gray-300"}`}
-              >
-                <Star className="h-6 w-6 fill-current" />
-              </Button>
-            ))}
-            <span className="ml-2 text-sm text-gray-600">
-              {value ? `${value}/${question.validation?.scale || 5}` : "Not rated"}
-            </span>
-          </div>
+        {question.type === "dropdown" && (
+          <Select value={value} onValueChange={(val) => updateAnswer(question.id, val)}>
+            <SelectTrigger className={hasError ? "border-red-500" : ""}>
+              <SelectValue placeholder="Select an option..." />
+            </SelectTrigger>
+            <SelectContent>
+              {question.options?.map((option, index) => (
+                <SelectItem key={index} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
 
-        {question.type === "number" && (
-          <Input
-            type="number"
-            value={value}
-            onChange={(e) => updateAnswer(question.id, e.target.value)}
-            placeholder="Enter a number..."
-            min={question.validation?.min}
-            max={question.validation?.max}
-            className={hasError ? "border-red-500" : ""}
-          />
-        )}
-
-        {question.type === "date" && (
+        {question.type === "date_time" && (
           <Input
             type="date"
             value={value}
@@ -327,36 +301,7 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
           />
         )}
 
-        {question.type === "time" && (
-          <Input
-            type="time"
-            value={value}
-            onChange={(e) => updateAnswer(question.id, e.target.value)}
-            className={hasError ? "border-red-500" : ""}
-          />
-        )}
-
-        {question.type === "email" && (
-          <Input
-            type="email"
-            value={value}
-            onChange={(e) => updateAnswer(question.id, e.target.value)}
-            placeholder="Enter email address..."
-            className={hasError ? "border-red-500" : ""}
-          />
-        )}
-
-        {question.type === "phone" && (
-          <Input
-            type="tel"
-            value={value}
-            onChange={(e) => updateAnswer(question.id, e.target.value)}
-            placeholder="Enter phone number..."
-            className={hasError ? "border-red-500" : ""}
-          />
-        )}
-
-        {question.type === "image" && (
+        {question.type === "file_upload" && (
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
             <Camera className="h-12 w-12 text-gray-400 mx-auto mb-2" />
             <p className="text-sm text-gray-600 mb-2">Click to upload image or take photo</p>
@@ -364,25 +309,50 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
               <Upload className="h-4 w-4 mr-2" />
               Choose File
             </Button>
-            {question.validation?.multiple && (
-              <p className="text-xs text-gray-500 mt-2">
-                You can upload up to {question.validation.maxImages || 5} images
-              </p>
-            )}
+            <p className="text-xs text-gray-500 mt-2">
+              Maximum file size: 10MB
+            </p>
           </div>
         )}
 
-        {question.type === "location" && (
+        {question.type === "barcode" && (
+          <div className="border border-gray-300 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <BarChart3 className="h-4 w-4 text-gray-500" />
+              <span className="text-sm font-medium">Barcode Scanner</span>
+            </div>
+            <Button variant="outline" size="sm">
+              Scan Barcode
+            </Button>
+            <p className="text-xs text-gray-500 mt-2">
+              Tap to open camera and scan barcode
+            </p>
+          </div>
+        )}
+
+        {question.type === "signature" && (
+          <div className="border border-gray-300 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Edit3 className="h-4 w-4 text-gray-500" />
+              <span className="text-sm font-medium">Digital Signature</span>
+            </div>
+            <div className="h-32 bg-gray-50 border border-dashed border-gray-300 rounded flex items-center justify-center">
+              <span className="text-gray-500 text-sm">Tap to sign</span>
+            </div>
+          </div>
+        )}
+
+        {question.type === "gps" && (
           <div className="border border-gray-300 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
               <MapPin className="h-4 w-4 text-gray-500" />
-              <span className="text-sm font-medium">Current Location</span>
+              <span className="text-sm font-medium">GPS Location</span>
             </div>
             <Button variant="outline" size="sm">
               Get Current Location
             </Button>
             <p className="text-xs text-gray-500 mt-2">
-              Location will be automatically captured when you tap the button
+              Location will be automatically captured
             </p>
           </div>
         )}
@@ -411,6 +381,22 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
             <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium mb-2">No Template to Preview</h3>
             <p className="text-gray-600 mb-4">Please add a template name and sections to preview.</p>
+            <Button onClick={onClose}>Back to Builder</Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // If no sections are visible due to conditional logic
+  if (totalSections === 0) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <Card className="w-96">
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium mb-2">No Sections Available</h3>
+            <p className="text-gray-600 mb-4">All sections are hidden based on conditional logic.</p>
             <Button onClick={onClose}>Back to Builder</Button>
           </CardContent>
         </Card>
@@ -473,6 +459,11 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
                 <CardTitle className="flex items-center gap-2">
                   {currentSection.title}
                   <Badge variant="secondary">{currentSection.questions.length} questions</Badge>
+                  {currentSection.conditionalLogic && currentSection.conditionalLogic.length > 0 && (
+                    <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-800 border-yellow-200">
+                      Conditional
+                    </Badge>
+                  )}
                 </CardTitle>
                 {currentSection.description && <p className="text-gray-600">{currentSection.description}</p>}
               </CardHeader>
@@ -481,9 +472,7 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
 
           {/* Questions */}
           <div className="space-y-6 mb-8">
-            {currentSection?.questions
-              .filter((question) => shouldShowQuestion(question, answers))
-              .map((question) => renderQuestion(question))}
+            {currentSection?.questions.map((question) => renderQuestion(question))}
           </div>
 
           {/* Navigation */}
@@ -494,7 +483,7 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
             </Button>
 
             <div className="flex items-center gap-2">
-              {template.sections.map((_, index) => (
+              {visibleSectionsList.map((_, index) => (
                 <div
                   key={index}
                   className={`w-3 h-3 rounded-full ${

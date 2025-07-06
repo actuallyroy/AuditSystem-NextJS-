@@ -64,24 +64,69 @@ export interface ApiError {
 
 class TemplateService {
   /**
+   * Make authenticated API request
+   */
+  private async makeRequest<T>(
+    endpoint: string,
+    options: {
+      method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+      body?: any;
+      token: string;
+      onTokenExpired?: () => void;
+    }
+  ): Promise<T> {
+    const { method = 'GET', body, token, onTokenExpired } = options;
+    
+    const config: RequestInit = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    };
+
+    if (body) {
+      config.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+
+    if (!response.ok) {
+      // Handle token expiration
+      if (response.status === 401 && onTokenExpired) {
+        onTokenExpired();
+        throw new Error('Session expired. Please login again.');
+      }
+      
+      let errorMessage = `HTTP ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorData.title || errorMessage;
+      } catch {
+        // If response is not JSON, use status text
+        errorMessage = response.statusText || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+
+    // Handle empty responses for DELETE operations
+    if (response.status === 204 || method === 'DELETE') {
+      return null as T;
+    }
+
+    try {
+      return await response.json();
+    } catch {
+      return null as T;
+    }
+  }
+
+  /**
    * Get all templates
    */
-  async getTemplates(token: string): Promise<Template[]> {
+  async getTemplates(token: string, onTokenExpired?: () => void): Promise<Template[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/Templates`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData: ApiError = await response.json();
-        throw new Error(errorData.message || 'Failed to get templates');
-      }
-
-      return await response.json();
+      return await this.makeRequest<Template[]>('/Templates', { token, onTokenExpired });
     } catch (error) {
       if (error instanceof Error) {
         throw error;
@@ -93,22 +138,9 @@ class TemplateService {
   /**
    * Get a specific template by ID
    */
-  async getTemplateById(templateId: string, token: string): Promise<Template> {
+  async getTemplateById(templateId: string, token: string, onTokenExpired?: () => void): Promise<Template> {
     try {
-      const response = await fetch(`${API_BASE_URL}/Templates/${templateId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData: ApiError = await response.json();
-        throw new Error(errorData.message || 'Failed to get template');
-      }
-
-      return await response.json();
+      return await this.makeRequest<Template>(`/Templates/${templateId}`, { token, onTokenExpired });
     } catch (error) {
       if (error instanceof Error) {
         throw error;
@@ -176,20 +208,13 @@ class TemplateService {
   /**
    * Delete a template
    */
-  async deleteTemplate(templateId: string, token: string): Promise<void> {
+  async deleteTemplate(templateId: string, token: string, onTokenExpired?: () => void): Promise<void> {
     try {
-      const response = await fetch(`${API_BASE_URL}/Templates/${templateId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+      await this.makeRequest<void>(`/Templates/${templateId}`, { 
+        method: 'DELETE', 
+        token, 
+        onTokenExpired 
       });
-
-      if (!response.ok) {
-        const errorData: ApiError = await response.json();
-        throw new Error(errorData.message || 'Failed to delete template');
-      }
     } catch (error) {
       if (error instanceof Error) {
         throw error;

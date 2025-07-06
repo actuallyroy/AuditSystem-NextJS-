@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Plus, Filter, Calendar, MapPin, User, Clock, Loader2, AlertCircle, CheckCircle, RefreshCw } from "lucide-react"
+import { Search, Plus, Filter, Calendar, MapPin, User, Clock, Loader2, AlertCircle, CheckCircle, RefreshCw, FileText } from "lucide-react"
 import { CreateAssignmentDialog } from "@/components/create-assignment-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { assignmentService, Assignment, AssignmentStats, StoreInfo } from "@/lib/assignment-service"
@@ -15,10 +15,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 interface AssignmentsProps {
   userRole?: "admin" | "manager" | "supervisor" | "auditor"
+  setActiveView?: (view: string) => void
 }
 
-export function Assignments({ userRole }: AssignmentsProps) {
-  const { user, userDetails } = useAuth()
+export function Assignments({ userRole, setActiveView }: AssignmentsProps) {
+  const { user, userDetails, handleTokenExpiration } = useAuth()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [stats, setStats] = useState<AssignmentStats>({
     total: 0,
@@ -53,12 +54,13 @@ export function Assignments({ userRole }: AssignmentsProps) {
       // Determine which assignments to load based on user role
       if (userRole === "auditor") {
         // Auditors see only their assignments
-        assignmentsData = await assignmentService.getMyAssignments(user.token)
+        assignmentsData = await assignmentService.getMyAssignments(user.token, handleTokenExpiration)
       } else {
         // Admins, managers, supervisors see all assignments in their organization
         assignmentsData = await assignmentService.getAssignments(
           user.token,
-          userDetails?.organisationId
+          userDetails?.organisationId,
+          handleTokenExpiration
         )
       }
 
@@ -67,7 +69,8 @@ export function Assignments({ userRole }: AssignmentsProps) {
       // Calculate stats
       const statsData = await assignmentService.getAssignmentStats(
         user.token,
-        userDetails?.organisationId
+        userDetails?.organisationId,
+        handleTokenExpiration
       )
       setStats(statsData)
 
@@ -98,13 +101,28 @@ export function Assignments({ userRole }: AssignmentsProps) {
     }
   }, [user?.token, userDetails?.organisationId, userRole])
 
+  // Helper functions to extract data from nested objects
+  const getTemplateName = (assignment: Assignment) => {
+    return assignment.template?.name || assignment.templateName || 'Unknown Template'
+  }
+
+  const getAssignedToName = (assignment: Assignment) => {
+    if (assignment.assignedTo) {
+      return `${assignment.assignedTo.firstName} ${assignment.assignedTo.lastName}`.trim()
+    }
+    return assignment.assignedToName || 'Unknown Auditor'
+  }
+
   // Filter assignments based on search term and filters
   const filteredAssignments = assignments.filter((assignment) => {
     const storeInfo = assignmentService.parseStoreInfo(assignment.storeInfo)
+    const templateName = getTemplateName(assignment)
+    const assignedToName = getAssignedToName(assignment)
+    
     const matchesSearch = 
       storeInfo.storeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (assignment.assignedToName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (assignment.templateName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      assignedToName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      templateName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       assignment.assignmentId.toLowerCase().includes(searchTerm.toLowerCase())
 
     const matchesStatus = statusFilter === "all" || assignment.status === statusFilter
@@ -342,15 +360,58 @@ export function Assignments({ userRole }: AssignmentsProps) {
         </CardHeader>
         <CardContent>
           {filteredAssignments.length === 0 ? (
-            <div className="text-center py-8">
+            <div className="text-center py-12">
               <CheckCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Assignments</h3>
-              <p className="text-gray-600">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
                 {searchTerm || statusFilter !== "all" || priorityFilter !== "all"
-                  ? "No assignments match your current filters."
-                  : "No assignments found."
+                  ? "No Matching Assignments"
+                  : "No Assignments Yet"
+                }
+              </h3>
+              <p className="text-gray-600 mb-6">
+                {searchTerm || statusFilter !== "all" || priorityFilter !== "all"
+                  ? "No assignments match your current filters. Try adjusting your search or filters."
+                  : userRole === "auditor" 
+                    ? "You don't have any assignments yet. Check back later or contact your manager."
+                    : "Get started by creating your first assignment."
                 }
               </p>
+              
+              {/* Show action buttons only if not filtered and user has permission */}
+              {!(searchTerm || statusFilter !== "all" || priorityFilter !== "all") && 
+               (userRole === "admin" || userRole === "manager" || userRole === "supervisor") && (
+                <div className="flex flex-col items-center gap-4">
+                  <div className="flex gap-3">
+                    <Button onClick={() => setShowCreateDialog(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Assignment
+                    </Button>
+                    {setActiveView && (
+                      <Button variant="outline" onClick={() => setActiveView('templates')}>
+                        <FileText className="h-4 w-4 mr-2" />
+                        Manage Templates
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    Need templates first? Create audit templates to assign to your team.
+                  </p>
+                </div>
+              )}
+              
+              {/* Show clear filters button if filtered */}
+              {(searchTerm || statusFilter !== "all" || priorityFilter !== "all") && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setSearchTerm("")
+                    setStatusFilter("all")
+                    setPriorityFilter("all")
+                  }}
+                >
+                  Clear Filters
+                </Button>
+              )}
             </div>
           ) : (
             <Table>
@@ -369,19 +430,21 @@ export function Assignments({ userRole }: AssignmentsProps) {
                 {filteredAssignments.map((assignment) => {
                   const storeInfo = assignmentService.parseStoreInfo(assignment.storeInfo)
                   const overdue = isOverdue(assignment)
+                  const templateName = getTemplateName(assignment)
+                  const assignedToName = getAssignedToName(assignment)
                   
                   return (
                     <TableRow key={assignment.assignmentId} className={overdue ? "bg-red-50" : ""}>
                       <TableCell>
                         <div>
-                          <div className="font-medium">{assignment.templateName || 'Unknown Template'}</div>
+                          <div className="font-medium">{templateName}</div>
                           <div className="text-sm text-gray-500">{assignment.assignmentId}</div>
                         </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-gray-400" />
-                          {assignment.assignedToName || 'Unknown Auditor'}
+                          {assignedToName}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -435,6 +498,7 @@ export function Assignments({ userRole }: AssignmentsProps) {
         open={showCreateDialog} 
         onOpenChange={setShowCreateDialog}
         onAssignmentCreated={handleAssignmentCreated}
+        setActiveView={setActiveView}
       />
     </div>
   )

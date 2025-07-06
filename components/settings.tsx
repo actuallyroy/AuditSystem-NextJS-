@@ -80,17 +80,17 @@ export function Settings({ userRole }: SettingsProps) {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
         <div className="border-b border-gray-200">
-          <TabsList className="grid w-full grid-cols-6 h-auto p-1 bg-gray-50 rounded-lg">
+          <TabsList className="grid w-full h-auto p-1 bg-gray-50 rounded-lg" style={{ gridTemplateColumns: `repeat(${filteredTabs.length}, 1fr)` }}>
             {filteredTabs.map((tab) => (
               <TabsTrigger
                 key={tab.id}
                 value={tab.id}
-                className="flex flex-col items-center gap-2 py-4 px-6 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md transition-all"
+                className="flex flex-col items-center gap-2 py-3 px-2 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-md transition-all min-h-[80px]"
               >
-                <tab.icon className="h-5 w-5" />
-                <div className="text-center">
-                  <div className="font-medium text-sm">{tab.label}</div>
-                  <div className="text-xs text-gray-500 hidden sm:block mt-1">{tab.description}</div>
+                <tab.icon className="h-5 w-5 flex-shrink-0" />
+                <div className="text-center flex-1">
+                  <div className="font-medium text-sm leading-tight">{tab.label}</div>
+                  <div className="text-xs text-gray-500 hidden lg:block mt-1 line-clamp-2 leading-tight">{tab.description}</div>
                 </div>
               </TabsTrigger>
             ))}

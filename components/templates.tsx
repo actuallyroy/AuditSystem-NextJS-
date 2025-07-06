@@ -6,8 +6,18 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Plus, Edit, Trash2, Copy, Eye, Filter, Loader2 } from "lucide-react"
-import { CreateTemplateDialog } from "@/components/create-template-dialog"
+import { Search, Plus, Edit, Trash2, Copy, Eye, Filter, Loader2, AlertTriangle } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+
 import { templateService, Template } from "@/lib/template-service"
 import { useAuth } from "@/lib/auth-context"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -15,16 +25,25 @@ import { format } from "date-fns"
 import { TemplatePreview } from "@/components/template-preview"
 import { useRouter } from "next/navigation"
 
-export function Templates() {
-  const { user } = useAuth()
+interface TemplatesProps {
+  setActiveView?: (view: string) => void
+}
+
+export function Templates({ setActiveView }: TemplatesProps) {
+  const { user, handleTokenExpiration } = useAuth()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
-  const [showCreateDialog, setShowCreateDialog] = useState(false)
+
   const [templates, setTemplates] = useState<Template[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null)
   const [isPreviewLoading, setIsPreviewLoading] = useState(false)
+  
+  // Delete confirmation dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [templateToDelete, setTemplateToDelete] = useState<Template | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   
   // Fetch templates on component mount
   useEffect(() => {
@@ -42,7 +61,7 @@ export function Templates() {
         throw new Error("Authentication required")
       }
       
-      const data = await templateService.getTemplates(user.token)
+      const data = await templateService.getTemplates(user.token, handleTokenExpiration)
       setTemplates(data)
     } catch (err) {
       console.error("Error fetching templates:", err)
@@ -52,22 +71,36 @@ export function Templates() {
     }
   }
   
-  const deleteTemplate = async (templateId: string) => {
-    if (!confirm("Are you sure you want to delete this template?")) {
-      return
-    }
+  const openDeleteDialog = (template: Template) => {
+    setTemplateToDelete(template)
+    setDeleteDialogOpen(true)
+  }
+
+  const closeDeleteDialog = () => {
+    setDeleteDialogOpen(false)
+    setTemplateToDelete(null)
+    setIsDeleting(false)
+  }
+  
+  const deleteTemplate = async () => {
+    if (!templateToDelete) return
+    
+    setIsDeleting(true)
     
     try {
       if (!user?.token) {
         throw new Error("Authentication required")
       }
       
-      await templateService.deleteTemplate(templateId, user.token)
+      await templateService.deleteTemplate(templateToDelete.templateId, user.token, handleTokenExpiration)
       // Remove the template from the list
-      setTemplates(templates.filter(t => t.templateId !== templateId))
+      setTemplates(templates.filter(t => t.templateId !== templateToDelete.templateId))
+      closeDeleteDialog()
     } catch (err) {
       console.error("Error deleting template:", err)
       alert(err instanceof Error ? err.message : "Failed to delete template")
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -79,7 +112,7 @@ export function Templates() {
         throw new Error("Authentication required")
       }
       
-      const template = await templateService.getTemplateById(templateId, user.token)
+      const template = await templateService.getTemplateById(templateId, user.token, handleTokenExpiration)
       setPreviewTemplate(template)
     } catch (err) {
       console.error("Error fetching template for preview:", err)
@@ -175,7 +208,7 @@ export function Templates() {
         onClose={closePreview}
         onSave={() => {
           closePreview();
-          router.push(`/template-builder/${previewTemplate.templateId}`);
+          setActiveView ? setActiveView('template-builder') : router.push(`/template-builder/${previewTemplate.templateId}`);
         }}
       />
     );
@@ -198,7 +231,7 @@ export function Templates() {
           <h2 className="text-2xl font-bold text-gray-900">Templates</h2>
           <p className="text-gray-600">Create and manage audit templates</p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)}>
+        <Button onClick={() => setActiveView ? setActiveView('template-builder') : router.push('/template-builder/new')}>
           <Plus className="h-4 w-4 mr-2" />
           Create Template
         </Button>
@@ -291,7 +324,7 @@ export function Templates() {
         <div className="bg-white border rounded-lg p-8 text-center">
           <h3 className="text-lg font-medium mb-2">No templates found</h3>
           <p className="text-gray-600 mb-6">Create your first template to get started</p>
-          <Button onClick={() => setShowCreateDialog(true)}>
+          <Button onClick={() => setActiveView ? setActiveView('template-builder') : router.push('/template-builder/new')}>
             <Plus className="h-4 w-4 mr-2" />
             Create Template
           </Button>
@@ -359,7 +392,7 @@ export function Templates() {
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => router.push(`/template-builder/${template.templateId}`)}
+                            onClick={() => setActiveView ? setActiveView('template-builder') : router.push(`/template-builder/${template.templateId}`)}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -370,7 +403,7 @@ export function Templates() {
                             variant="ghost" 
                             size="sm" 
                             className="text-red-600 hover:text-red-700"
-                            onClick={() => deleteTemplate(template.templateId)}
+                            onClick={() => openDeleteDialog(template)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -385,7 +418,55 @@ export function Templates() {
         </Card>
       )}
 
-      <CreateTemplateDialog open={showCreateDialog} onOpenChange={setShowCreateDialog} />
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={closeDeleteDialog}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <AlertTriangle className="h-6 w-6 text-red-600" />
+              <AlertDialogTitle>Delete Template</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="space-y-3">
+              <p>
+                Are you sure you want to delete <strong>"{templateToDelete?.name}"</strong>?
+              </p>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
+                <p className="text-sm font-medium text-red-800">⚠️ This action cannot be undone</p>
+                <p className="text-sm text-red-700">
+                  Deleting this template may affect:
+                </p>
+                <ul className="text-sm text-red-700 list-disc list-inside space-y-1 ml-2">
+                  <li>Active assignments using this template</li>
+                  <li>Ongoing audits in progress</li>
+                  <li>Historical audit data</li>
+                  <li>Reports and analytics</li>
+                </ul>
+              </div>
+              <p className="text-sm text-gray-600">
+                Consider archiving the template instead if you need to preserve audit history.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={deleteTemplate}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete Template'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   )
 }
