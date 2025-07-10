@@ -18,7 +18,8 @@ interface ConditionalLogic {
   condition: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty'
   value: string | number | boolean
   action: 'show' | 'hide' | 'skip'
-  targetQuestionIds: string[]
+  targetSectionId?: string
+  targetQuestionIds?: string[]
 }
 
 interface Question {

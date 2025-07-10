@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Plus, Filter, Calendar, MapPin, User, Clock, Loader2, AlertCircle, CheckCircle, RefreshCw, FileText } from "lucide-react"
+import { Search, Plus, Filter, Calendar, MapPin, User, Clock, Loader2, AlertCircle, CheckCircle, RefreshCw, FileText, Trash2 } from "lucide-react"
 import { CreateAssignmentDialog } from "@/components/create-assignment-dialog"
 import { useAuth } from "@/lib/auth-context"
 import { assignmentService, Assignment, AssignmentStats, StoreInfo } from "@/lib/assignment-service"
@@ -36,6 +36,7 @@ export function Assignments({ userRole, setActiveView }: AssignmentsProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   // Load assignments data
   const loadAssignments = async (showLoader = true) => {
@@ -202,6 +203,29 @@ export function Assignments({ userRole, setActiveView }: AssignmentsProps) {
   const handleAssignmentCreated = () => {
     // Refresh assignments after creating a new one
     loadAssignments(false)
+  }
+
+  // Delete assignment handler
+  const handleDeleteAssignment = async (assignmentId: string) => {
+    if (!user?.token) return
+    if (!window.confirm("Are you sure you want to delete this assignment? This action cannot be undone.")) return
+    setDeletingId(assignmentId)
+    try {
+      await assignmentService.deleteAssignment(assignmentId, user.token)
+      // Remove from local state for instant feedback
+      setAssignments((prev) => prev.filter(a => a.assignmentId !== assignmentId))
+      // Optionally, refresh stats
+      const statsData = await assignmentService.getAssignmentStats(
+        user.token,
+        userDetails?.organisationId,
+        handleTokenExpiration
+      )
+      setStats(statsData)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete assignment")
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   if (isLoading) {
@@ -424,6 +448,10 @@ export function Assignments({ userRole, setActiveView }: AssignmentsProps) {
                   <TableHead>Priority</TableHead>
                   <TableHead>Due Date</TableHead>
                   <TableHead>Created</TableHead>
+                  {/* Delete column header for admin/manager/supervisor */}
+                  {(userRole === "admin" || userRole === "manager" || userRole === "supervisor") && (
+                    <TableHead></TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -485,6 +513,24 @@ export function Assignments({ userRole, setActiveView }: AssignmentsProps) {
                           {formatDate(assignment.createdAt)}
                         </div>
                       </TableCell>
+                      {/* Delete button for admin/manager/supervisor */}
+                      {(userRole === "admin" || userRole === "manager" || userRole === "supervisor") && (
+                        <TableCell>
+                          <Button 
+                            variant="destructive" 
+                            size="icon" 
+                            onClick={() => handleDeleteAssignment(assignment.assignmentId)}
+                            disabled={deletingId === assignment.assignmentId}
+                            title="Delete Assignment"
+                          >
+                            {deletingId === assignment.assignmentId ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   )
                 })}

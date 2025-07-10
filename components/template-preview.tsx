@@ -19,8 +19,9 @@ interface ConditionalLogic {
   sourceQuestionId: string
   condition: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty'
   value: string | number | boolean
-  action: 'show' | 'hide'
-  targetSectionId: string
+  action: 'show' | 'hide' | 'skip'
+  targetSectionId?: string
+  targetQuestionIds?: string[]
 }
 
 interface Question {
@@ -32,6 +33,7 @@ interface Question {
   options?: string[]
   validation?: any
   scoring?: number
+  conditionalLogic?: ConditionalLogic[]
 }
 
 interface Section {
@@ -60,36 +62,64 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
   const [answers, setAnswers] = useState<Record<string, any>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [visibleSections, setVisibleSections] = useState<string[]>([])
+  const [visibleQuestions, setVisibleQuestions] = useState<Record<string, boolean>>({})
 
-  // Calculate which sections should be visible based on conditional logic
+  // Calculate which sections and questions should be visible based on conditional logic
   useEffect(() => {
-    const calculateVisibleSections = () => {
-      const visible: string[] = []
+    const calculateVisibility = () => {
+      const visibleSections: string[] = []
+      const visibleQuestions: Record<string, boolean> = {}
+      
+      // Initialize all questions as visible
+      template.sections.forEach(section => {
+        section.questions.forEach(question => {
+          visibleQuestions[question.id] = true
+        })
+      })
       
       template.sections.forEach(section => {
-        let shouldShow = true
+        let sectionShouldShow = true
         
+        // Check section-level conditional logic
         if (section.conditionalLogic && section.conditionalLogic.length > 0) {
-          // Check all conditional logic rules for this section
           for (const logic of section.conditionalLogic) {
             const conditionMet = evaluateCondition(logic, answers)
             
             if (conditionMet) {
-              shouldShow = logic.action === 'show'
+              sectionShouldShow = logic.action === 'show'
               break // First matching condition wins
             }
           }
         }
         
-        if (shouldShow) {
-          visible.push(section.id)
+        if (sectionShouldShow) {
+          visibleSections.push(section.id)
+          
+          // Check question-level conditional logic within this section
+          section.questions.forEach(question => {
+            if (question.conditionalLogic && question.conditionalLogic.length > 0) {
+              let questionShouldShow = true
+              
+              for (const logic of question.conditionalLogic) {
+                const conditionMet = evaluateCondition(logic, answers)
+                
+                if (conditionMet) {
+                  questionShouldShow = logic.action === 'show'
+                  break // First matching condition wins
+                }
+              }
+              
+              visibleQuestions[question.id] = questionShouldShow
+            }
+          })
         }
       })
       
-      setVisibleSections(visible)
+      setVisibleSections(visibleSections)
+      setVisibleQuestions(visibleQuestions)
     }
     
-    calculateVisibleSections()
+    calculateVisibility()
   }, [answers, template.sections])
 
   // Get current visible sections
@@ -199,6 +229,11 @@ export function TemplatePreview({ template, onClose, onSave }: TemplatePreviewPr
   }
 
   const renderQuestion = (question: Question) => {
+    // Skip rendering if question is not visible
+    if (!visibleQuestions[question.id]) {
+      return null
+    }
+    
     const hasError = !!errors[question.id]
     const value = answers[question.id] || ""
 

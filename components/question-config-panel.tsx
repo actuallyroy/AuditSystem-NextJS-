@@ -10,7 +10,17 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { X, Plus, Trash2, GripVertical } from "lucide-react"
+import { X, Plus, Trash2, GripVertical, Zap } from "lucide-react"
+import { ConditionalLogicPanel } from "@/components/conditional-logic-panel"
+
+interface ConditionalLogic {
+  id: string
+  sourceQuestionId: string
+  condition: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty'
+  value: string | number | boolean
+  action: 'show' | 'hide' | 'skip'
+  targetQuestionIds: string[]
+}
 
 interface Question {
   id: string
@@ -21,6 +31,7 @@ interface Question {
   options?: string[]
   validation?: any
   scoring?: number
+  conditionalLogic?: ConditionalLogic[]
 }
 
 interface Section {
@@ -40,6 +51,7 @@ interface QuestionConfigPanelProps {
 
 export function QuestionConfigPanel({ question, allQuestions, sections, onUpdate, onClose }: QuestionConfigPanelProps) {
   const [localQuestion, setLocalQuestion] = useState(question)
+  const [showConditionalLogic, setShowConditionalLogic] = useState(false)
 
   // Reset local state when question prop changes
   useEffect(() => {
@@ -70,6 +82,7 @@ export function QuestionConfigPanel({ question, allQuestions, sections, onUpdate
 
   const hasOptions = ["dropdown", "single_choice", "multiple_choice"].includes(question.type)
   const hasValidation = ["text", "numeric"].includes(question.type)
+  const conditionalLogicCount = question.conditionalLogic?.length || 0
 
   return (
     <div className="w-80 bg-white border-l flex flex-col">
@@ -134,6 +147,37 @@ export function QuestionConfigPanel({ question, allQuestions, sections, onUpdate
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Conditional Logic Section */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label>Conditional Logic</Label>
+                <p className="text-sm text-gray-500">Control when this question is shown or hidden</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowConditionalLogic(!showConditionalLogic)}
+              >
+                <Zap className="h-4 w-4 mr-2" />
+                {conditionalLogicCount > 0 && (
+                  <Badge variant="secondary" className="ml-1">
+                    {conditionalLogicCount}
+                  </Badge>
+                )}
+              </Button>
+            </div>
+
+            {showConditionalLogic && (
+              <ConditionalLogicPanel
+                question={localQuestion}
+                allQuestions={allQuestions}
+                sections={sections}
+                onUpdate={updateLocalQuestion}
+              />
+            )}
           </div>
 
           {/* Options for dropdown, single_choice, multiple_choice */}

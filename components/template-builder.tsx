@@ -62,8 +62,9 @@ interface ConditionalLogic {
   sourceQuestionId: string
   condition: 'equals' | 'not_equals' | 'contains' | 'not_contains' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty'
   value: string | number | boolean
-  action: 'show' | 'hide'
-  targetSectionId: string
+  action: 'show' | 'hide' | 'skip'
+  targetSectionId?: string
+  targetQuestionIds?: string[]
 }
 
 interface Question {
@@ -75,6 +76,7 @@ interface Question {
   options?: string[]
   validation?: any
   scoring?: number
+  conditionalLogic?: ConditionalLogic[]
 }
 
 interface Section {
@@ -89,6 +91,7 @@ interface Section {
 interface Template {
   name: string
   description: string
+  category: string
   sections: Section[]
 }
 
@@ -111,6 +114,7 @@ export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
         return {
           name: initialTemplate.name,
           description: initialTemplate.description,
+          category: initialTemplate.category || "Store Visit",
           sections: parsedQuestions.sections.map((section: any) => ({
             id: `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             title: section.title,
@@ -137,6 +141,7 @@ export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
         return {
           name: "",
           description: "",
+          category: "Store Visit",
           sections: [],
         };
       }
@@ -146,6 +151,7 @@ export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
     return {
       name: "",
       description: "",
+      category: "Store Visit",
       sections: [],
     };
   });
@@ -244,7 +250,7 @@ export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
     },
   ]
 
-  const updateTemplateInfo = (field: 'name' | 'description', value: string) => {
+  const updateTemplateInfo = (field: 'name' | 'description' | 'category', value: string) => {
     setTemplate((prev) => ({ ...prev, [field]: value }))
     // Clear validation errors when user makes changes
     if (validationErrors.length > 0) {
@@ -801,7 +807,7 @@ export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
       const templateData = {
         name: template.name,
         description: template.description,
-        category: initialTemplate?.category || "Store Visit",
+        category: template.category,
         questions: JSON.stringify(apiQuestions),
         scoringRules: JSON.stringify(apiScoringRules),
         validFrom: initialTemplate?.validFrom || new Date().toISOString(),
@@ -841,6 +847,10 @@ export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
     
     if (!template.name || template.name.trim() === '') {
       errors.push('Template name is required')
+    }
+    
+    if (!template.category || template.category.trim() === '') {
+      errors.push('Template category is required')
     }
     
     if (template.sections.length === 0) {
@@ -1011,7 +1021,7 @@ export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Template Info */}
           <div className="bg-white border-b p-6">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-3">
               <div>
                 <Label htmlFor="template-name">Template Name</Label>
                 <Input
@@ -1020,6 +1030,26 @@ export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
                   value={template.name}
                   onChange={(e) => updateTemplateInfo('name', e.target.value)}
                 />
+              </div>
+              <div>
+                <Label htmlFor="template-category">Category</Label>
+                <Select
+                  value={template.category}
+                  onValueChange={(value) => updateTemplateInfo('category', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Store Visit">Store Visit</SelectItem>
+                    <SelectItem value="Compliance">Compliance</SelectItem>
+                    <SelectItem value="Safety">Safety</SelectItem>
+                    <SelectItem value="Quality">Quality</SelectItem>
+                    <SelectItem value="Inventory">Inventory</SelectItem>
+                    <SelectItem value="Customer Service">Customer Service</SelectItem>
+                    <SelectItem value="Merchandising">Merchandising</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="template-description">Description</Label>
@@ -1146,6 +1176,11 @@ export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
                                       {question.required && (
                                         <Badge variant="destructive" className="text-xs">
                                           Required
+                                        </Badge>
+                                      )}
+                                      {question.conditionalLogic && question.conditionalLogic.length > 0 && (
+                                        <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-800 border-yellow-200">
+                                          <Zap className="h-3 w-3 mr-1" /> Conditional
                                         </Badge>
                                       )}
                                     </div>
