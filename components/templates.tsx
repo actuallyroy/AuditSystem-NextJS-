@@ -188,10 +188,28 @@ export function Templates({ setActiveView }: TemplatesProps) {
   // Format date for display
   const formatDate = (dateString: string) => {
     try {
+      if (!dateString) return '-';
       return format(new Date(dateString), 'yyyy-MM-dd')
     } catch (e) {
-      return 'Invalid date'
+      return '-'
     }
+  }
+
+  // Helper to get the latest date (updatedAt or fallback to createdAt)
+  const getLatestTemplateDate = (templates: Template[]) => {
+    if (templates.length === 0) return null;
+    let latestDate: Date | null = null;
+    for (const t of templates) {
+      let date = t.updatedAt && !isNaN(new Date(t.updatedAt).getTime())
+        ? new Date(t.updatedAt)
+        : t.createdAt && !isNaN(new Date(t.createdAt).getTime())
+          ? new Date(t.createdAt)
+          : null;
+      if (date && (!latestDate || date > latestDate)) {
+        latestDate = date;
+      }
+    }
+    return latestDate;
   }
 
   const filteredTemplates = templates.filter(
@@ -279,10 +297,8 @@ export function Templates({ setActiveView }: TemplatesProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {templates.length > 0 
-                ? formatDate(templates.sort((a, b) => 
-                    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-                  )[0].updatedAt)
+              {templates.length > 0
+                ? formatDate(getLatestTemplateDate(templates)?.toISOString() || '')
                 : '-'}
             </div>
           </CardContent>
@@ -389,6 +405,7 @@ export function Templates({ setActiveView }: TemplatesProps) {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
+                          {/*
                           <Button 
                             variant="ghost" 
                             size="sm"
@@ -399,6 +416,7 @@ export function Templates({ setActiveView }: TemplatesProps) {
                           <Button variant="ghost" size="sm">
                             <Copy className="h-4 w-4" />
                           </Button>
+                          */}
                           <Button 
                             variant="ghost" 
                             size="sm" 

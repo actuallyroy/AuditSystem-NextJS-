@@ -97,7 +97,7 @@ The dashboard has been fully implemented and integrated with the Retail Executio
 ### API Base URL
 The dashboard service uses the same API base URL as other services:
 ```typescript
-const API_BASE_URL = 'http://localhost:8080/api/v1';
+const API_BASE_URL = 'https://test.scorptech.co/api/v1';
 ```
 
 ### Authentication

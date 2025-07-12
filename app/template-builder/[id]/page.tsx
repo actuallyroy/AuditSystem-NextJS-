@@ -61,5 +61,10 @@ export default function TemplateBuilderPage() {
     )
   }
   
-  return <TemplateBuilder initialTemplate={template} />
+  return <TemplateBuilder initialTemplate={template} setActiveView={(view) => {
+    // Since this is a standalone page, we need to navigate back to the main app
+    if (view === "templates") {
+      window.location.href = "/"
+    }
+  }} />
 } 

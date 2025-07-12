@@ -62,7 +62,7 @@ export default function Home() {
       case "settings":
         return <Settings userRole={userRole} initialTab={settingsTab} setTab={setSettingsTab} />
       case "template-builder":
-        return <TemplateBuilder />
+        return <TemplateBuilder setActiveView={setActiveView} />
       default:
         return <Dashboard userRole={userRole} />
     }

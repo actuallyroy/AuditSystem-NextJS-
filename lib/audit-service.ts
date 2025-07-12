@@ -1,7 +1,7 @@
 // Audit service for handling API calls
 // Based on OpenAPI specification
 
-const API_BASE_URL = 'http://localhost:8080/api/v1';
+const API_BASE_URL = 'https://test.scorptech.co/api/v1';
 
 // Types matching OpenAPI spec
 export interface AuditSummaryDto {

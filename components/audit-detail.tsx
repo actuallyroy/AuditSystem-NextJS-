@@ -143,6 +143,7 @@ export function AuditDetail({ auditId, onBack }: AuditDetailProps) {
             <p className="text-gray-600">Audit ID: {audit.auditId}</p>
           </div>
         </div>
+        {/*
         <div className="flex items-center gap-2">
           {audit.isFlagged && <Flag className="h-5 w-5 text-red-500" />}
           <Button
@@ -154,6 +155,7 @@ export function AuditDetail({ auditId, onBack }: AuditDetailProps) {
             {audit.isFlagged ? 'Unflag' : 'Flag'}
           </Button>
         </div>
+        */}
       </div>
 
       {/* Main Content */}
@@ -331,7 +333,6 @@ export function AuditDetail({ auditId, onBack }: AuditDetailProps) {
                   <tr className="bg-muted">
                     <th className="p-2 text-left border-b">Question</th>
                     <th className="p-2 text-left border-b">Answer</th>
-                    <th className="p-2 text-left border-b">Photos</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -341,17 +342,6 @@ export function AuditDetail({ auditId, onBack }: AuditDetailProps) {
                       <tr key={qid}>
                         <td className="p-2 border-b font-medium">{q ? q.text : qid}</td>
                         <td className="p-2 border-b">{resp.answer ?? ''}</td>
-                        <td className="p-2 border-b">
-                          {resp.photos && resp.photos.length > 0 ? (
-                            <ul className="list-disc ml-4">
-                              {resp.photos.map((url: string, i: number) => (
-                                <li key={i}><a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Photo {i+1}</a></li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <span className="text-gray-400">No photos</span>
-                          )}
-                        </td>
                       </tr>
                     )
                   })}

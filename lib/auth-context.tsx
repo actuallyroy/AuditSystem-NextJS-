@@ -5,6 +5,7 @@ import { authService, AuthResponse, UserDetails } from "./auth-service"
 
 // Define the shape of the auth context
 interface AuthContextType {
+  [x: string]: any
   isAuthenticated: boolean
   isLoading: boolean
   user: AuthResponse | null

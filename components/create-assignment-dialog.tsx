@@ -171,7 +171,7 @@ export function CreateAssignmentDialog({ open, onOpenChange, onAssignmentCreated
       addDebugInfo("Fetching users from API...")
       
       // Use the correct endpoint for getting users by organisation
-      const response = await fetch(`http://localhost:8080/api/v1/Users/by-organisation/${userDetails.organisationId}`, {
+      const response = await fetch(`https://test.scorptech.co/api/v1/Users/by-organisation/${userDetails.organisationId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',

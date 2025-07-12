@@ -97,9 +97,10 @@ interface Template {
 
 interface TemplateBuilderProps {
   initialTemplate?: APITemplate
+  setActiveView?: (view: string) => void
 }
 
-export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
+export function TemplateBuilder({ initialTemplate, setActiveView }: TemplateBuilderProps) {
   const { user } = useAuth()
   const router = useRouter()
   const [isSaving, setIsSaving] = useState(false)
@@ -832,7 +833,7 @@ export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
       }
       
       // Navigate back to templates list
-      router.push("/")
+      setActiveView?.("templates")
     } catch (error) {
       console.error("Error saving template:", error)
       alert(`Error saving template: ${error instanceof Error ? error.message : "Unknown error"}`)
@@ -936,7 +937,7 @@ export function TemplateBuilder({ initialTemplate }: TemplateBuilderProps) {
       <div className="bg-white border-b px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => router.push("/")}>
+            <Button variant="ghost" size="sm" onClick={() => setActiveView?.("templates")}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Templates
             </Button>
